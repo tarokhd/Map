@@ -125,7 +125,7 @@ class MainActivity : Activity() {
         searchInput = EditText(this).apply {
             hint = "جست‌وجوی شهر یا مکان..."
             textSize = 13f
-            singleLine = true
+            maxLines = 1
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
             setPadding(dp(12), 0, dp(12), 0)
