@@ -1,10 +1,11 @@
-# Open-source notices
+# Open-source and service notices
 
-Iran Navigator Demo uses the MapLibre Native Android SDK.
+Iran Navigator 0.2 uses:
 
-- MapLibre Native: https://github.com/maplibre/maplibre-native
-- OpenFreeMap map style and vector tiles: https://openfreemap.org/
-- OpenStreetMap contributors: https://www.openstreetmap.org/copyright
+- MapLibre Native Android SDK: https://github.com/maplibre/maplibre-native
+- OpenFreeMap styles and vector tiles: https://openfreemap.org/
+- OpenStreetMap data and contributors: https://www.openstreetmap.org/copyright
+- Valhalla routing engine and public demo service: https://valhalla.github.io/valhalla/
+- Photon geocoding service: https://photon.komoot.io/
 
-The demo uses publicly hosted map and geocoding endpoints for development only.
-Those endpoints have their own usage policies and are not a production backend.
+Public map, geocoding, and routing endpoints are used for prototype testing only. Their terms, fair-use rules, availability, and rate limits apply. A production deployment should use owned or contractually supported services and retain all required attribution.
