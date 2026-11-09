@@ -93,6 +93,8 @@ class MainActivity : Activity() {
     private var lastAnnouncedManeuver = -1
     private var offRouteCount = 0
     private var lastRerouteAt = 0L
+    private var lastCameraFollowAt = 0L
+    private var lastCameraLocation: NavPoint? = null
     private var routeRequestToken = 0
 
     private var routeSource: GeoJsonSource? = null
@@ -698,6 +700,7 @@ class MainActivity : Activity() {
         }
 
         if (isNavigating && !fromCache && location.accuracy <= 65f) {
+            followNavigationCamera(location)
             updateNavigationProgress(location)
         }
     }
@@ -1019,6 +1022,8 @@ class MainActivity : Activity() {
         centerOnNextLocation = currentLocation?.let { !isFreshLocation(it) } ?: true
         offRouteCount = 0
         lastAnnouncedManeuver = -1
+        lastCameraFollowAt = 0L
+        lastCameraLocation = null
         startLocationUpdates()
         refreshControlButtons()
         statusText.text = "مسیریابی زنده فعال شد؛ منتظر موقعیت دقیق GPS..."
@@ -1031,6 +1036,30 @@ class MainActivity : Activity() {
         voice?.stop()
         refreshControlButtons()
         statusText.text = "مسیریابی متوقف شد."
+    }
+
+    private fun followNavigationCamera(location: Location) {
+        val now = System.currentTimeMillis()
+        val point = NavPoint(location.latitude, location.longitude)
+        val previous = lastCameraLocation
+        val movedEnough = previous == null || distanceMeters(previous, point) >= 7.0
+        if (!movedEnough || now - lastCameraFollowAt < 1800L) return
+
+        val currentBearing = map?.cameraPosition?.bearing ?: 0.0
+        val bearing = if (location.speed > 2f) location.bearing.toDouble() else currentBearing
+        map?.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder()
+                    .target(LatLng(point.latitude, point.longitude))
+                    .zoom(17.2)
+                    .tilt(58.0)
+                    .bearing(bearing)
+                    .build()
+            ),
+            700
+        )
+        lastCameraFollowAt = now
+        lastCameraLocation = point
     }
 
     private fun updateNavigationProgress(location: Location) {
@@ -1093,9 +1122,11 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     if (token != routeRequestToken || !isNavigating) return@runOnUiThread
                     routeResult = result
+                    origin = start
                     currentManeuverIndex = firstGuidanceIndex(result)
                     lastAnnouncedManeuver = -1
                     renderRoute()
+                    renderPointMarkers()
                     fitRoute(result)
                     summaryText.text = "مسافت باقی‌مانده ${PersianInstructionFormatter.distance(result.distanceKm * 1000.0)}  •  ${PersianInstructionFormatter.duration(result.durationSeconds)}"
                     updateGuidanceCard(null)
