@@ -2,6 +2,7 @@ package com.irannavigator.demo
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -11,7 +12,7 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.widget.EditText
@@ -30,364 +31,1154 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.FillExtrusionLayer
+import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
+import org.maplibre.geojson.Polygon
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.util.Locale
 import java.util.concurrent.Executors
+import kotlin.math.*
 
-class MainActivity : Activity(), LocationListener {
+class MainActivity : Activity() {
     private lateinit var mapView: MapView
-    private lateinit var status: TextView
-    private lateinit var search: EditText
-    private lateinit var instruction: TextView
-    private lateinit var summary: TextView
+    private lateinit var topPanel: LinearLayout
+    private lateinit var bottomPanel: LinearLayout
+    private lateinit var instructionCard: LinearLayout
+    private lateinit var searchInput: EditText
+    private lateinit var statusText: TextView
+    private lateinit var summaryText: TextView
+    private lateinit var instructionText: TextView
+    private lateinit var nextStepText: TextView
+    private lateinit var distanceText: TextView
+    private lateinit var modeButtons: Map<TravelMode, TextView>
+    private lateinit var originButton: TextView
+    private lateinit var destinationButton: TextView
+    private lateinit var voiceButton: TextView
+    private lateinit var threeDButton: TextView
+    private lateinit var themeButton: TextView
+    private lateinit var gpsButton: TextView
+    private lateinit var calculateButton: TextView
+    private lateinit var startButton: TextView
+    private lateinit var stopButton: TextView
+
     private var map: MapLibreMap? = null
     private var style: Style? = null
+    private val io = Executors.newSingleThreadExecutor()
+    private val routingEngine = RoutingEngine()
+    private var voice: PersianVoice? = null
+    private var locationManager: LocationManager? = null
+    private var locationListener: LocationListener? = null
+
+    private var origin: NavPoint? = null
+    private var destination: NavPoint? = null
+    private var currentLocation: Location? = null
+    private var routeResult: RouteResult? = null
+    private var selectedMode = TravelMode.CAR
+    private var selectingOrigin = true
+    private var isDarkTheme = true
+    private var is3DEnabled = true
+    private var voiceEnabled = true
+    private var isNavigating = false
+    private var trackingRequested = false
+    private var centerOnNextLocation = false
+    private var pendingSetOriginFromGps = false
+    private var pendingStartAfterPermission = false
+    private var currentManeuverIndex = 0
+    private var lastAnnouncedManeuver = -1
+    private var offRouteCount = 0
+    private var lastRerouteAt = 0L
+    private var routeRequestToken = 0
+
     private var routeSource: GeoJsonSource? = null
     private var userSource: GeoJsonSource? = null
-    private var origin: LatLng? = null
-    private var destination: LatLng? = null
-    private var routePoints: List<LatLng> = emptyList()
-    private var maneuvers = org.json.JSONArray()
-    private var maneuverIndex = 0
-    private var mode = "auto"
-    private var dark = true
-    private var navigating = false
-    private var lastLocation: Location? = null
-    private var tts: TextToSpeech? = null
-    private var ttsReady = false
-    private val io = Executors.newSingleThreadExecutor()
-    private val lm by lazy { getSystemService(Context.LOCATION_SERVICE) as LocationManager }
-    private val tehran = LatLng(35.7006, 51.4050)
+    private var accuracySource: GeoJsonSource? = null
+    private var originSource: GeoJsonSource? = null
+    private var destinationSource: GeoJsonSource? = null
+
+    private val tehran = NavPoint(35.7006, 51.4050)
+    private val locationPermissionRequest = 410
+
+    private data class SearchCandidate(val title: String, val subtitle: String, val point: NavPoint) {
+        fun display(): String = if (subtitle.isBlank()) title else "$title\n$subtitle"
+    }
+
+    private val locationCallback = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            handleLocation(location)
+        }
+
+        override fun onProviderEnabled(provider: String) {
+            statusText.text = "دریافت موقعیت فعال شد."
+        }
+
+        override fun onProviderDisabled(provider: String) {
+            if (provider == LocationManager.GPS_PROVIDER) {
+                statusText.text = "GPS خاموش است؛ در صورت امکان از موقعیت شبکه استفاده می‌شود."
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.rgb(12, 22, 36)
-        window.navigationBarColor = Color.rgb(12, 22, 36)
+        window.statusBarColor = Color.rgb(10, 19, 32)
+        window.navigationBarColor = Color.rgb(10, 19, 32)
         MapLibre.getInstance(applicationContext)
-        tts = TextToSpeech(this) { result ->
-            ttsReady = result == TextToSpeech.SUCCESS && (tts?.setLanguage(Locale("fa", "IR")) ?: TextToSpeech.LANG_MISSING_DATA) >= TextToSpeech.LANG_AVAILABLE
-        }
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
         val root = FrameLayout(this)
-        mapView = MapView(this).also { it.onCreate(savedInstanceState) }
+        mapView = MapView(this)
+        mapView.onCreate(savedInstanceState)
         root.addView(mapView, FrameLayout.LayoutParams(-1, -1))
-        root.addView(topPanel(), FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { setMargins(dp(12), dp(12), dp(12), 0) })
-        root.addView(bottomPanel(), FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(dp(12), 0, dp(12), dp(16)) })
+
+        topPanel = buildTopPanel()
+        bottomPanel = buildBottomPanel()
+        root.addView(topPanel, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply {
+            setMargins(dp(12), dp(12), dp(12), 0)
+        })
+        root.addView(bottomPanel, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply {
+            setMargins(dp(12), 0, dp(12), dp(18))
+        })
         setContentView(root)
-        mapView.getMapAsync { m ->
-            map = m
-            m.uiSettings.isCompassEnabled = true
-            m.uiSettings.isAttributionEnabled = true
-            m.addOnMapClickListener { p ->
-                if (origin == null || destination != null) {
-                    origin = p; destination = null
-                    status.text = "مبدأ انتخاب شد؛ حالا مقصد را انتخاب کنید."
-                } else {
-                    destination = p
-                    status.text = "مقصد انتخاب شد؛ محاسبه مسیر را بزنید."
+
+        voice = PersianVoice(this) { _, message ->
+            runOnUiThread {
+                if (::statusText.isInitialized) {
+                    statusText.text = message
+                    refreshControlButtons()
                 }
+            }
+        }
+        refreshThemeUi()
+        updateSelectionButtons()
+        updateModeButtons()
+        refreshControlButtons()
+
+        mapView.getMapAsync { mapObject ->
+            map = mapObject
+            mapObject.uiSettings.isCompassEnabled = true
+            mapObject.uiSettings.isAttributionEnabled = true
+            loadMapStyle()
+            mapObject.addOnMapClickListener { point ->
+                val selected = NavPoint(point.latitude, point.longitude)
+                applyPointSelection(selected, if (selectingOrigin) "مبدأ انتخاب شد" else "مقصد انتخاب شد")
                 true
             }
-            loadStyle()
         }
     }
 
-    private fun loadStyle() {
-        val uri = if (dark) "https://tiles.openfreemap.org/styles/dark" else "https://tiles.openfreemap.org/styles/bright"
-        map?.setStyle(Style.Builder().fromUri(uri)) { s ->
-            style = s; routeSource = null; userSource = null
-            try {
-                val b = FillExtrusionLayer("buildings-3d", "openmaptiles")
-                b.sourceLayer = "building"; b.minZoom = 15f
-                b.setFilter(Expression.has("render_height"))
-                b.setProperties(PropertyFactory.fillExtrusionColor(if (dark) "#8FAABD" else "#AAB8C4"),
-                    PropertyFactory.fillExtrusionHeight(Expression.get("render_height")),
-                    PropertyFactory.fillExtrusionBase(Expression.get("render_min_height")),
-                    PropertyFactory.fillExtrusionOpacity(0.88f))
-                s.addLayer(b)
-            } catch (_: Exception) { }
-            userSource = GeoJsonSource("user-source", Feature.fromGeometry(Point.fromLngLat(tehran.longitude, tehran.latitude)))
-            s.addSource(userSource!!)
-            s.addLayer(CircleLayer("user-dot", "user-source").withProperties(
-                PropertyFactory.circleRadius(8f), PropertyFactory.circleColor("#087CFF"),
-                PropertyFactory.circleStrokeColor("#FFFFFF"), PropertyFactory.circleStrokeWidth(3f)))
-            if (routePoints.isNotEmpty()) drawRoute()
-            val target = lastLocation?.let { LatLng(it.latitude, it.longitude) } ?: tehran
-            map?.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(target).zoom(15.5).tilt(50.0).build()), 450)
+    private fun buildTopPanel(): LinearLayout {
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = rounded(Color.rgb(16, 29, 47), 22)
+            elevation = dp(10).toFloat()
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        val brand = TextView(this).apply {
+            text = "IRAN NAVIGATOR"
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0.08f
+        }
+        header.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
+        themeButton = button("تاریک") { toggleTheme() }
+        header.addView(themeButton, LinearLayout.LayoutParams(dp(66), dp(38)))
+        threeDButton = button("۳D روشن") { toggle3D() }
+        header.addView(threeDButton, LinearLayout.LayoutParams(dp(78), dp(38)).apply {
+            marginEnd = dp(6)
+        })
+        panel.addView(header)
+
+        val searchRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        searchInput = EditText(this).apply {
+            hint = "جست‌وجوی شهر، خیابان یا مکان"
+            textSize = 13f
+            maxLines = 1
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(165, 181, 199))
+            setPadding(dp(12), 0, dp(12), 0)
+            background = rounded(Color.rgb(35, 51, 72), 14)
+        }
+        searchRow.addView(searchInput, LinearLayout.LayoutParams(0, dp(46), 1f))
+        searchRow.addView(button("جست‌وجو") { searchPlace() }, LinearLayout.LayoutParams(dp(86), dp(46)).apply {
+            marginStart = dp(7)
+        })
+        panel.addView(searchRow, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(10)
+        })
+        return panel
     }
 
-    private fun topPanel(): View {
-        val p = panel()
+    private fun buildBottomPanel(): LinearLayout {
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = rounded(Color.rgb(13, 25, 41), 24)
+            elevation = dp(14).toFloat()
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
         val title = TextView(this).apply {
-            text = "IRAN NAVIGATOR 2.0"; textSize = 16f; typeface = Typeface.DEFAULT_BOLD
-            setTextColor(if (dark) Color.WHITE else Color.rgb(20, 38, 58)); gravity = Gravity.RIGHT
+            text = "مسیریابی هوشمند"
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
         }
-        p.addView(title)
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
-        search = EditText(this).apply {
-            hint = "جست‌وجوی شهر، خیابان یا مکان"; maxLines = 1; textSize = 13f
-            setTextColor(if (dark) Color.WHITE else Color.BLACK); setHintTextColor(Color.GRAY)
-            setPadding(dp(12), 0, dp(12), 0); background = rounded(if (dark) 0xFF24364C.toInt() else 0xFFF0F4F7.toInt(), 12)
+        titleRow.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
+        voiceButton = button("صدای فارسی") { toggleVoice() }
+        titleRow.addView(voiceButton, LinearLayout.LayoutParams(dp(104), dp(36)))
+        panel.addView(titleRow)
+
+        statusText = TextView(this).apply {
+            text = "برای انتخاب مبدأ یا مقصد، حالت انتخاب را مشخص و روی نقشه لمس کنید."
+            setTextColor(Color.rgb(172, 191, 210))
+            textSize = 11f
+            maxLines = 2
+            setPadding(0, dp(6), 0, dp(4))
         }
-        row.addView(search, LinearLayout.LayoutParams(0, dp(46), 1f))
-        row.addView(btn("جست‌وجو") { searchPlace() }, LinearLayout.LayoutParams(dp(84), dp(46)).apply { marginStart = dp(6) })
-        p.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
-        return p
-    }
+        panel.addView(statusText)
 
-    private fun bottomPanel(): View {
-        val p = panel()
-        val modes = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
-        modes.addView(btn("خودرو") { setMode("auto") }, LinearLayout.LayoutParams(0, dp(40), 1f))
-        modes.addView(btn("موتورسیکلت") { setMode("motorcycle") }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(5) })
-        modes.addView(btn("پیاده") { setMode("pedestrian") }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(5) })
-        p.addView(modes)
-        val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
-        tools.addView(btn("موقعیت من") { requestGps() }, LinearLayout.LayoutParams(0, dp(42), 1.2f))
-        tools.addView(btn(if (dark) "حالت روشن" else "حالت تاریک") { dark = !dark; loadStyle(); rebuildPanels() }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(5) })
-        tools.addView(btn("۲بعدی") { tilt(0) }, LinearLayout.LayoutParams(0, dp(42), .7f).apply { marginStart = dp(5) })
-        tools.addView(btn("۳بعدی") { tilt(52) }, LinearLayout.LayoutParams(0, dp(42), .7f).apply { marginStart = dp(5) })
-        p.addView(tools, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
-        p.addView(btn("محاسبه مسیر و شروع راهنمایی") { route() }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
-        instruction = TextView(this).apply {
-            text = "مبدأ و مقصد را با لمس نقشه یا جست‌وجو انتخاب کنید."
-            textSize = 14f; typeface = Typeface.DEFAULT_BOLD
-            setTextColor(if (dark) Color.WHITE else Color.rgb(20, 38, 58)); setPadding(0, dp(9), 0, dp(3))
+        instructionCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(9), dp(12), dp(9))
+            background = rounded(Color.rgb(25, 47, 68), 16)
         }
-        p.addView(instruction)
-        summary = TextView(this).apply { text = "موقعیت‌یابی تازه و راهنمای صوتی فارسی"; textSize = 11f; setTextColor(if (dark) Color.LTGRAY else Color.DKGRAY) }
-        p.addView(summary)
-        status = TextView(this).apply { text = "حالت خودرو"; textSize = 11f; setTextColor(0xFF16BFA9.toInt()); setPadding(0, dp(4), 0, 0) }
-        p.addView(status)
-        return p
+        instructionText = TextView(this).apply {
+            text = "راهنمای مسیر پس از محاسبه نمایش داده می‌شود."
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            maxLines = 2
+        }
+        nextStepText = TextView(this).apply {
+            text = "گام بعدی: —"
+            setTextColor(Color.rgb(178, 198, 216))
+            textSize = 11f
+            maxLines = 1
+            setPadding(0, dp(4), 0, 0)
+        }
+        distanceText = TextView(this).apply {
+            text = "فاصله تا گردش بعدی: —"
+            setTextColor(Color.rgb(84, 220, 203))
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(4), 0, 0)
+        }
+        instructionCard.addView(instructionText)
+        instructionCard.addView(nextStepText)
+        instructionCard.addView(distanceText)
+        panel.addView(instructionCard, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(4)
+        })
+
+        summaryText = TextView(this).apply {
+            text = "مسافت —  •  زمان —"
+            setTextColor(Color.rgb(200, 216, 230))
+            textSize = 11f
+            setPadding(0, dp(7), 0, dp(3))
+        }
+        panel.addView(summaryText)
+
+        val modeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        val buttons = linkedMapOf<TravelMode, TextView>()
+        TravelMode.values().forEach { mode ->
+            val label = when (mode) {
+                TravelMode.CAR -> "خودرو"
+                TravelMode.MOTORCYCLE -> "موتور"
+                TravelMode.WALKING -> "پیاده"
+            }
+            val item = button(label) {
+                selectedMode = mode
+                clearRoute("حالت سفر تغییر کرد؛ مسیر را دوباره محاسبه کنید.")
+                updateModeButtons()
+            }
+            buttons[mode] = item
+            modeRow.addView(item, LinearLayout.LayoutParams(0, dp(40), 1f).apply {
+                if (mode != TravelMode.CAR) marginStart = dp(7)
+            })
+        }
+        modeButtons = buttons
+        panel.addView(modeRow, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(7)
+        })
+
+        val selectionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        originButton = button("انتخاب مبدأ") {
+            selectingOrigin = true
+            updateSelectionButtons()
+            statusText.text = "مبدأ فعال است؛ روی نقشه لمس کنید یا دکمه GPS را بزنید."
+        }
+        destinationButton = button("انتخاب مقصد") {
+            selectingOrigin = false
+            updateSelectionButtons()
+            statusText.text = "مقصد فعال است؛ روی نقشه لمس کنید یا از جست‌وجو استفاده کنید."
+        }
+        selectionRow.addView(originButton, LinearLayout.LayoutParams(0, dp(40), 1f))
+        selectionRow.addView(destinationButton, LinearLayout.LayoutParams(0, dp(40), 1f).apply {
+            marginStart = dp(7)
+        })
+        panel.addView(selectionRow, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(7)
+        })
+
+        val actionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        gpsButton = button("موقعیت من") { locateUser() }
+        calculateButton = button("محاسبه مسیر") { calculateRoute() }
+        startButton = button("شروع") { startNavigation() }
+        stopButton = button("توقف") { stopNavigation() }
+        actionRow.addView(gpsButton, LinearLayout.LayoutParams(0, dp(44), 1f))
+        actionRow.addView(calculateButton, LinearLayout.LayoutParams(0, dp(44), 1.25f).apply {
+            marginStart = dp(6)
+        })
+        actionRow.addView(startButton, LinearLayout.LayoutParams(0, dp(44), 0.85f).apply {
+            marginStart = dp(6)
+        })
+        actionRow.addView(stopButton, LinearLayout.LayoutParams(0, dp(44), 0.75f).apply {
+            marginStart = dp(6)
+        })
+        panel.addView(actionRow, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(8)
+        })
+        return panel
     }
 
-    private fun rebuildPanels() {
-        val root = mapView.parent as? FrameLayout ?: return
-        if (root.childCount >= 3) { root.removeViewAt(2); root.removeViewAt(1) }
-        root.addView(topPanel(), FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { setMargins(dp(12), dp(12), dp(12), 0) })
-        root.addView(bottomPanel(), FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(dp(12), 0, dp(12), dp(16)) })
+    private fun button(label: String, action: () -> Unit): TextView =
+        TextView(this).apply {
+            text = label
+            gravity = Gravity.CENTER
+            textSize = 11.5f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = rounded(Color.rgb(34, 78, 101), 13)
+            isClickable = true
+            isFocusable = true
+            setPadding(dp(5), 0, dp(5), 0)
+            setOnClickListener { action() }
+        }
+
+    private fun refreshThemeUi() {
+        if (!::topPanel.isInitialized || !::bottomPanel.isInitialized) return
+        val panelColor = if (isDarkTheme) Color.rgb(13, 25, 41) else Color.rgb(250, 252, 255)
+        val cardColor = if (isDarkTheme) Color.rgb(25, 47, 68) else Color.rgb(229, 239, 249)
+        topPanel.background = rounded(if (isDarkTheme) Color.rgb(16, 29, 47) else Color.rgb(248, 251, 255), 22)
+        bottomPanel.background = rounded(panelColor, 24)
+        instructionCard.background = rounded(cardColor, 16)
+        val mainText = if (isDarkTheme) Color.WHITE else Color.rgb(20, 39, 57)
+        val secondary = if (isDarkTheme) Color.rgb(172, 191, 210) else Color.rgb(73, 94, 116)
+        instructionText.setTextColor(mainText)
+        nextStepText.setTextColor(secondary)
+        statusText.setTextColor(secondary)
+        summaryText.setTextColor(secondary)
+        distanceText.setTextColor(if (isDarkTheme) Color.rgb(84, 220, 203) else Color.rgb(0, 126, 132))
+        themeButton.text = if (isDarkTheme) "تاریک" else "روشن"
+        updateModeButtons()
+        updateSelectionButtons()
+        refreshControlButtons()
     }
 
-    private fun panel() = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL
-        setPadding(dp(15), dp(13), dp(15), dp(13))
-        background = rounded(if (dark) 0xF20D1B2D.toInt() else Color.WHITE, 22); elevation = dp(10).toFloat()
-    }
-    private fun btn(label: String, action: () -> Unit) = TextView(this).apply {
-        text = label; gravity = Gravity.CENTER; textSize = 12f; typeface = Typeface.DEFAULT_BOLD
-        setTextColor(Color.WHITE); background = rounded(0xFF147F8B.toInt(), 12)
-        isClickable = true; isFocusable = true; setOnClickListener { action() }
-    }
-    private fun rounded(color: Int, radius: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
-
-    private fun setMode(value: String) {
-        mode = value
-        status.text = "حالت: " + when (mode) { "auto" -> "خودرو"; "motorcycle" -> "موتورسیکلت"; else -> "پیاده‌روی" }
-        if (origin != null && destination != null) route()
-    }
-    private fun tilt(value: Int) {
-        val c = map?.cameraPosition ?: return
-        map?.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(c.target ?: tehran).zoom(maxOf(c.zoom, 15.0)).tilt(value.toDouble()).bearing(c.bearing).build()), 350)
+    private fun refreshControlButtons() {
+        if (!::voiceButton.isInitialized) return
+        voiceButton.text = if (voiceEnabled) "صدا: روشن" else "صدا: خاموش"
+        threeDButton.text = if (is3DEnabled) "۳D روشن" else "۳D خاموش"
+        startButton.text = if (isNavigating) "در حال حرکت" else "شروع"
+        startButton.isEnabled = !isNavigating
+        stopButton.isEnabled = isNavigating
+        calculateButton.isEnabled = !isNavigating
+        val active = if (isDarkTheme) Color.rgb(0, 139, 145) else Color.rgb(0, 130, 145)
+        voiceButton.background = rounded(if (voiceEnabled) active else Color.rgb(65, 83, 99), 13)
+        threeDButton.background = rounded(if (is3DEnabled) active else Color.rgb(65, 83, 99), 13)
     }
 
-    private fun route() {
-        val from = origin ?: lastLocation?.let { LatLng(it.latitude, it.longitude) }
-        val to = destination
-        if (from == null || to == null) { Toast.makeText(this, "مبدأ و مقصد را مشخص کنید.", Toast.LENGTH_LONG).show(); return }
-        status.text = "در حال محاسبه مسیر خیابانی..."
-        io.execute {
-            var c: HttpURLConnection? = null
+    private fun updateModeButtons() {
+        if (!::modeButtons.isInitialized) return
+        modeButtons.forEach { (mode, view) ->
+            val selected = mode == selectedMode
+            view.background = rounded(
+                if (selected) Color.rgb(0, 139, 145)
+                else if (isDarkTheme) Color.rgb(34, 55, 76) else Color.rgb(219, 231, 242),
+                13
+            )
+            view.setTextColor(if (selected || isDarkTheme) Color.WHITE else Color.rgb(24, 50, 73))
+        }
+    }
+
+    private fun updateSelectionButtons() {
+        if (!::originButton.isInitialized) return
+        originButton.background = rounded(
+            if (selectingOrigin) Color.rgb(0, 145, 106) else Color.rgb(49, 72, 91), 13
+        )
+        destinationButton.background = rounded(
+            if (!selectingOrigin) Color.rgb(199, 74, 75) else Color.rgb(49, 72, 91), 13
+        )
+    }
+
+    private fun toggleTheme() {
+        isDarkTheme = !isDarkTheme
+        refreshThemeUi()
+        loadMapStyle()
+    }
+
+    private fun toggle3D() {
+        is3DEnabled = !is3DEnabled
+        val currentStyle = style
+        if (currentStyle != null) {
             try {
-                val request = JSONObject().apply {
-                    put("locations", org.json.JSONArray()
-                        .put(JSONObject().put("lat", from.latitude).put("lon", from.longitude).put("type", "break"))
-                        .put(JSONObject().put("lat", to.latitude).put("lon", to.longitude).put("type", "break")))
-                    put("costing", mode); put("units", "kilometers"); put("language", "en-US")
-                }
-                c = URL("https://valhalla1.openstreetmap.de/route").openConnection() as HttpURLConnection
-                c.requestMethod = "POST"; c.connectTimeout = 15000; c.readTimeout = 25000; c.doOutput = true
-                c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                c.setRequestProperty("User-Agent", "IranNavigator/2.0")
-                c.outputStream.use { it.write(request.toString().toByteArray(Charsets.UTF_8)) }
-                val stream = if (c.responseCode in 200..299) c.inputStream else c.errorStream
-                val response = JSONObject(stream.bufferedReader().use { it.readText() })
-                if (c.responseCode !in 200..299 || response.has("error")) throw Exception(response.optString("error", "Route unavailable"))
-                val trip = response.getJSONObject("trip")
-                val leg = trip.getJSONArray("legs").getJSONObject(0)
-                val points = decodePolyline6(leg.getString("shape"))
-                val steps = leg.getJSONArray("maneuvers")
-                runOnUiThread {
-                    routePoints = points; maneuvers = steps; maneuverIndex = 0
-                    drawRoute()
-                    val s = trip.getJSONObject("summary")
-                    summary.text = String.format(Locale.US, "%.1f km  •  حدود %.0f دقیقه", s.optDouble("length"), s.optDouble("time") / 60.0)
-                    navigating = true; showStep(0, true); fitRoute(points)
-                    status.text = "مسیر جاده‌ای محاسبه شد؛ موقعیت‌یابی را فعال کنید."
-                }
-            } catch (e: Exception) {
-                runOnUiThread { status.text = "مسیریابی ناموفق: " + (e.message ?: "خطای اتصال") }
-            } finally { c?.disconnect() }
+                if (is3DEnabled) add3DBuildings(currentStyle) else currentStyle.removeLayer("iran-buildings-3d")
+            } catch (_: Exception) {
+                if (is3DEnabled) add3DBuildings(currentStyle)
+            }
+        }
+        refreshControlButtons()
+    }
+
+    private fun toggleVoice() {
+        voiceEnabled = !voiceEnabled
+        if (!voiceEnabled) voice?.stop()
+        refreshControlButtons()
+        statusText.text = if (voiceEnabled) {
+            if (voice?.isReady == true) "راهنمای صوتی فارسی فعال است."
+            else "صدای فارسی روی این گوشی هنوز آماده نیست."
+        } else "راهنمای صوتی خاموش شد."
+    }
+
+    private fun loadMapStyle() {
+        val mapObject = map ?: return
+        val styleUrl = if (isDarkTheme) {
+            "https://tiles.openfreemap.org/styles/dark"
+        } else {
+            "https://tiles.openfreemap.org/styles/positron"
+        }
+        mapObject.setStyle(Style.Builder().fromUri(styleUrl)) { loadedStyle ->
+            style = loadedStyle
+            routeSource = null
+            userSource = null
+            accuracySource = null
+            originSource = null
+            destinationSource = null
+            if (is3DEnabled) add3DBuildings(loadedStyle)
+            renderRoute()
+            renderPointMarkers()
+            currentLocation?.let { updateLocationLayers(it) }
+            statusText.text = if (isDarkTheme) "نقشه سه‌بعدی با پوسته تاریک آماده است." else "نقشه با پوسته روشن آماده است."
+            refreshThemeUi()
+            if (routeResult == null && origin == null && destination == null) {
+                mapObject.animateCamera(
+                    CameraUpdateFactory.newCameraPosition(
+                        CameraPosition.Builder()
+                            .target(LatLng(tehran.latitude, tehran.longitude))
+                            .zoom(14.8)
+                            .tilt(52.0)
+                            .bearing(0.0)
+                            .build()
+                    ),
+                    650
+                )
+            }
         }
     }
 
-    private fun decodePolyline6(encoded: String): List<LatLng> {
-        val result = mutableListOf<LatLng>(); var i = 0; var lat = 0; var lon = 0
-        while (i < encoded.length) {
-            var b: Int; var shift = 0; var value = 0
-            do { b = encoded[i++].code - 63; value = value or ((b and 31) shl shift); shift += 5 } while (b >= 32 && i < encoded.length)
-            lat += if ((value and 1) != 0) (value shr 1).inv() else value shr 1
-            shift = 0; value = 0
-            do { b = encoded[i++].code - 63; value = value or ((b and 31) shl shift); shift += 5 } while (b >= 32 && i < encoded.length)
-            lon += if ((value and 1) != 0) (value shr 1).inv() else value shr 1
-            result.add(LatLng(lat / 1e6, lon / 1e6))
-        }
-        return result
-    }
-
-    private fun drawRoute() {
-        val s = style ?: return
-        if (routePoints.size < 2) return
-        val feature = Feature.fromGeometry(LineString.fromLngLats(routePoints.map { Point.fromLngLat(it.longitude, it.latitude) }))
-        if (routeSource == null) {
-            routeSource = GeoJsonSource("route-source-v2", feature); s.addSource(routeSource!!)
-            s.addLayer(LineLayer("route-shadow-v2", "route-source-v2").withProperties(PropertyFactory.lineColor(if (dark) "#06354A" else "#D2F3EF"), PropertyFactory.lineWidth(10f), PropertyFactory.lineCap("round"), PropertyFactory.lineJoin("round")))
-            s.addLayer(LineLayer("route-line-v2", "route-source-v2").withProperties(PropertyFactory.lineColor("#00BFA6"), PropertyFactory.lineWidth(5f), PropertyFactory.lineCap("round"), PropertyFactory.lineJoin("round")))
-        } else routeSource?.setGeoJson(feature)
-    }
-
-    private fun fitRoute(points: List<LatLng>) {
-        if (points.isEmpty()) return
-        val b = org.maplibre.android.geometry.LatLngBounds.Builder()
-        points.forEach { b.include(it) }
-        map?.animateCamera(CameraUpdateFactory.newLatLngBounds(b.build(), dp(45), dp(180), dp(230)), 600)
-    }
-
-    private fun showStep(index: Int, speak: Boolean) {
-        if (maneuvers.length() == 0) return
-        maneuverIndex = index.coerceIn(0, maneuvers.length() - 1)
-        val m = maneuvers.getJSONObject(maneuverIndex)
-        val type = m.optInt("type", 8)
-        val streetArray = m.optJSONArray("street_names")
-        val street = if (streetArray != null && streetArray.length() > 0) streetArray.optString(0) else ""
-        val text = persianStep(type, street)
-        instruction.text = text
-        if (speak && ttsReady) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "step-" + maneuverIndex)
-    }
-
-    private fun persianStep(type: Int, street: String): String {
-        val turn = when (type) {
-            1, 2, 3 -> "حرکت را آغاز کنید"
-            4, 5, 6 -> "به مقصد رسیدید"
-            9 -> "کمی به راست متمایل شوید"
-            16 -> "کمی به چپ متمایل شوید"
-            10, 11, 18, 20, 23 -> "به راست بپیچید"
-            15, 14, 19, 21, 24 -> "به چپ بپیچید"
-            12, 13 -> "دور بزنید"
-            17, 22 -> "مستقیم ادامه دهید"
-            25 -> "به مسیر ادغام شوید"
-            26 -> "وارد میدان شوید"
-            27 -> "از میدان خارج شوید"
-            else -> "مسیر را ادامه دهید"
-        }
-        return if (street.isBlank()) turn else turn + " به مسیر " + street
-    }
-
-    private fun requestGps() {
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 410); return
-        }
+    private fun add3DBuildings(loadedStyle: Style) {
+        if (!is3DEnabled) return
         try {
-            var active = false
-            if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1200L, 2f, this); active = true
-            }
-            if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 2500L, 5f, this); active = true
-            }
-            status.text = if (active) "در حال دریافت موقعیت تازه؛ منتظر دقت بهتر..." else "GPS و مکان‌یابی شبکه را روشن کنید."
-        } catch (_: SecurityException) { status.text = "اجازه مکان‌یابی صادر نشده است." }
+            val buildings = FillExtrusionLayer("iran-buildings-3d", "openmaptiles")
+            buildings.sourceLayer = "building"
+            buildings.minZoom = 14f
+            buildings.setFilter(Expression.has("render_height"))
+            buildings.setProperties(
+                PropertyFactory.fillExtrusionColor(if (isDarkTheme) "#73869B" else "#B8C6D4"),
+                PropertyFactory.fillExtrusionHeight(Expression.get("render_height")),
+                PropertyFactory.fillExtrusionBase(Expression.get("render_min_height")),
+                PropertyFactory.fillExtrusionOpacity(0.88f)
+            )
+            loadedStyle.addLayer(buildings)
+        } catch (_: Exception) {
+            statusText.text = "داده ساختمان سه‌بعدی در این محدوده کامل نیست."
+        }
     }
 
-    override fun onLocationChanged(location: Location) {
-        if (location.hasAccuracy() && location.accuracy > 65f) {
-            status.text = "دقت فعلی ضعیف است: " + location.accuracy.toInt() + " متر؛ منتظر GPS بهتر..."
+    private fun applyPointSelection(point: NavPoint, message: String) {
+        if (selectingOrigin) {
+            origin = point
+            statusText.text = "$message؛ اکنون مقصد را انتخاب کنید."
+        } else {
+            destination = point
+            statusText.text = "$message؛ حالا مسیر را محاسبه کنید."
+        }
+        clearRoute(null)
+        renderPointMarkers()
+        updatePointSummary()
+    }
+
+    private fun updatePointSummary() {
+        val start = if (origin == null) "مبدأ انتخاب نشده" else "مبدأ ثبت شد"
+        val end = if (destination == null) "مقصد انتخاب نشده" else "مقصد ثبت شد"
+        summaryText.text = "$start  •  $end"
+    }
+
+    private fun clearRoute(message: String?) {
+        routeRequestToken += 1
+        routeResult = null
+        isNavigating = false
+        currentManeuverIndex = 0
+        lastAnnouncedManeuver = -1
+        offRouteCount = 0
+        try {
+            style?.removeLayer("active-route-line")
+            style?.removeLayer("active-route-casing")
+            style?.removeSource("active-route-source")
+        } catch (_: Exception) {
+        }
+        routeSource = null
+        if (message != null) statusText.text = message
+        instructionText.text = "راهنمای مسیر پس از محاسبه نمایش داده می‌شود."
+        nextStepText.text = "گام بعدی: —"
+        distanceText.text = "فاصله تا گردش بعدی: —"
+        summaryText.text = "مسافت —  •  زمان —"
+        refreshControlButtons()
+        renderPointMarkers()
+    }
+
+    private fun locateUser() {
+        trackingRequested = true
+        centerOnNextLocation = true
+        if (!hasLocationPermission()) {
+            requestPermissions(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                locationPermissionRequest
+            )
             return
         }
-        if (lastLocation != null && location.time < lastLocation!!.time) return
-        lastLocation = location
-        val point = LatLng(location.latitude, location.longitude)
-        userSource?.setGeoJson(Feature.fromGeometry(Point.fromLngLat(location.longitude, location.latitude)))
-        summary.text = "دقت موقعیت حدود " + location.accuracy.toInt() + " متر"
-        if (origin == null) origin = point
-        if (navigating) {
-            map?.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(point).zoom(17.0).tilt(50.0).bearing(if (location.hasBearing()) location.bearing.toDouble() else 0.0).build()), 650)
-            advanceManeuver(location)
-        } else map?.animateCamera(CameraUpdateFactory.newLatLng(point), 300)
+        if (selectingOrigin && currentLocation == null) pendingSetOriginFromGps = true
+        startLocationUpdates()
+        val location = currentLocation
+        if (location != null && selectingOrigin && location.accuracy <= 60f) {
+            origin = NavPoint(location.latitude, location.longitude)
+            clearRoute("موقعیت فعلی به‌عنوان مبدأ ثبت شد.")
+            renderPointMarkers()
+            updatePointSummary()
+        } else {
+            statusText.text = "در حال دریافت موقعیت تازه از GPS و شبکه..."
+        }
     }
 
-    private fun advanceManeuver(location: Location) {
-        if (maneuvers.length() == 0 || routePoints.isEmpty()) return
-        val next = (maneuverIndex + 1).coerceAtMost(maneuvers.length() - 1)
-        val m = maneuvers.optJSONObject(next) ?: return
-        val shapeIndex = m.optInt("begin_shape_index", 0).coerceIn(0, routePoints.lastIndex)
-        val target = routePoints[shapeIndex]
-        val distance = FloatArray(1)
-        Location.distanceBetween(location.latitude, location.longitude, target.latitude, target.longitude, distance)
-        if (distance[0] < 40f && next > maneuverIndex) showStep(next, true)
+    private fun hasLocationPermission(): Boolean {
+        val fine = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        return fine || coarse
+    }
+
+    private fun startLocationUpdates() {
+        if (!hasLocationPermission()) return
+        val manager = locationManager ?: return
+        val listener = locationCallback
+        locationListener = listener
+        try {
+            val fine = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val providers = if (fine) {
+                listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            } else {
+                listOf(LocationManager.NETWORK_PROVIDER)
+            }
+            var registered = false
+            providers.forEach { provider ->
+                try {
+                    if (manager.isProviderEnabled(provider)) {
+                        manager.requestLocationUpdates(provider, 1500L, 2f, listener, Looper.getMainLooper())
+                        registered = true
+                    }
+                } catch (_: IllegalArgumentException) {
+                } catch (_: SecurityException) {
+                }
+            }
+
+            val recent = providers.mapNotNull { provider ->
+                try {
+                    manager.getLastKnownLocation(provider)
+                } catch (_: SecurityException) {
+                    null
+                }
+            }.filter { location ->
+                val age = System.currentTimeMillis() - location.time
+                age in 0..20000 && location.accuracy <= 100f
+            }.minByOrNull { it.accuracy }
+
+            if (recent != null && currentLocation == null) {
+                handleLocation(recent, fromCache = true)
+            }
+            if (!registered) statusText.text = "هیچ ارائه‌دهنده موقعیت فعالی پیدا نشد؛ GPS دستگاه را بررسی کنید."
+        } catch (_: SecurityException) {
+            statusText.text = "اجازه دسترسی به موقعیت صادر نشده است."
+        }
+    }
+
+    private fun stopLocationUpdates() {
+        try {
+            locationListener?.let { locationManager?.removeUpdates(it) }
+        } catch (_: SecurityException) {
+        }
+        locationListener = null
+    }
+
+    private fun handleLocation(location: Location, fromCache: Boolean = false) {
+        val previous = currentLocation
+        if (previous != null && location.time < previous.time) return
+        currentLocation = location
+        updateLocationLayers(location)
+
+        if (centerOnNextLocation && !fromCache && location.accuracy <= 60f) {
+            centerOnNextLocation = false
+            val bearing = if (location.hasBearing() && location.speed > 2f) location.bearing.toDouble() else 0.0
+            map?.animateCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder()
+                        .target(LatLng(location.latitude, location.longitude))
+                        .zoom(17.0)
+                        .tilt(if (isNavigating) 58.0 else 48.0)
+                        .bearing(bearing)
+                        .build()
+                ),
+                550
+            )
+        }
+
+        if (pendingSetOriginFromGps && !fromCache && location.accuracy <= 60f) {
+            pendingSetOriginFromGps = false
+            origin = NavPoint(location.latitude, location.longitude)
+            clearRoute("موقعیت تازه GPS به‌عنوان مبدأ ثبت شد.")
+            renderPointMarkers()
+            updatePointSummary()
+        }
+
+        val accuracyText = PersianInstructionFormatter.toPersianDigits(location.accuracy.toInt().toString())
+        statusText.text = if (fromCache) {
+            "آخرین موقعیت ذخیره‌شده؛ دقت تقریبی $accuracyText متر. منتظر GPS تازه..."
+        } else {
+            "موقعیت به‌روز شد؛ دقت گزارش‌شده $accuracyText متر."
+        }
+
+        if (isNavigating && !fromCache && location.accuracy <= 65f) {
+            updateNavigationProgress(location)
+        }
+    }
+
+    private fun updateLocationLayers(location: Location) {
+        val loadedStyle = style ?: return
+        val point = Point.fromLngLat(location.longitude, location.latitude)
+        val userFeature = Feature.fromGeometry(point)
+
+        if (userSource == null) {
+            userSource = GeoJsonSource("user-location-source", userFeature)
+            loadedStyle.addSource(userSource!!)
+            val userLayer = CircleLayer("user-location-layer", "user-location-source").withProperties(
+                PropertyFactory.circleRadius(8f),
+                PropertyFactory.circleColor("#168BFF"),
+                PropertyFactory.circleStrokeColor("#FFFFFF"),
+                PropertyFactory.circleStrokeWidth(2.5f)
+            )
+            loadedStyle.addLayer(userLayer)
+        } else {
+            userSource?.setGeoJson(userFeature)
+        }
+
+        val radius = location.accuracy.toDouble().coerceIn(8.0, 1200.0)
+        val ring = accuracyRing(location.latitude, location.longitude, radius)
+        val accuracyFeature = Feature.fromGeometry(Polygon.fromLngLats(listOf(ring)))
+        if (accuracySource == null) {
+            accuracySource = GeoJsonSource("user-accuracy-source", accuracyFeature)
+            loadedStyle.addSource(accuracySource!!)
+            val accuracyLayer = FillLayer("user-accuracy-layer", "user-accuracy-source").withProperties(
+                PropertyFactory.fillColor("#168BFF"),
+                PropertyFactory.fillOpacity(0.13f)
+            )
+            loadedStyle.addLayer(accuracyLayer)
+        } else {
+            accuracySource?.setGeoJson(accuracyFeature)
+        }
+    }
+
+    private fun accuracyRing(latitude: Double, longitude: Double, radiusMeters: Double): List<Point> {
+        val earth = 6378137.0
+        val lat1 = Math.toRadians(latitude)
+        val lon1 = Math.toRadians(longitude)
+        val angular = radiusMeters / earth
+        val ring = ArrayList<Point>()
+        for (i in 0..36) {
+            val bearing = 2.0 * Math.PI * i / 36.0
+            val lat2 = asin(sin(lat1) * cos(angular) + cos(lat1) * sin(angular) * cos(bearing))
+            val lon2 = lon1 + atan2(
+                sin(bearing) * sin(angular) * cos(lat1),
+                cos(angular) - sin(lat1) * sin(lat2)
+            )
+            ring += Point.fromLngLat(Math.toDegrees(lon2), Math.toDegrees(lat2))
+        }
+        return ring
+    }
+
+    private fun renderPointMarkers() {
+        val loadedStyle = style ?: return
+        origin?.let { point ->
+            val feature = Feature.fromGeometry(Point.fromLngLat(point.longitude, point.latitude))
+            if (originSource == null) {
+                originSource = GeoJsonSource("route-origin-source", feature)
+                loadedStyle.addSource(originSource!!)
+                loadedStyle.addLayer(
+                    CircleLayer("route-origin-layer", "route-origin-source").withProperties(
+                        PropertyFactory.circleRadius(8f),
+                        PropertyFactory.circleColor("#12B886"),
+                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                        PropertyFactory.circleStrokeWidth(2f)
+                    )
+                )
+            } else originSource?.setGeoJson(feature)
+        }
+        destination?.let { point ->
+            val feature = Feature.fromGeometry(Point.fromLngLat(point.longitude, point.latitude))
+            if (destinationSource == null) {
+                destinationSource = GeoJsonSource("route-destination-source", feature)
+                loadedStyle.addSource(destinationSource!!)
+                loadedStyle.addLayer(
+                    CircleLayer("route-destination-layer", "route-destination-source").withProperties(
+                        PropertyFactory.circleRadius(8f),
+                        PropertyFactory.circleColor("#EF5350"),
+                        PropertyFactory.circleStrokeColor("#FFFFFF"),
+                        PropertyFactory.circleStrokeWidth(2f)
+                    )
+                )
+            } else destinationSource?.setGeoJson(feature)
+        }
     }
 
     private fun searchPlace() {
-        val q0 = search.text.toString().trim()
-        if (q0.isEmpty()) return
-        status.text = "در حال جست‌وجو..."
+        val query = searchInput.text.toString().trim()
+        if (query.isBlank()) {
+            Toast.makeText(this, "نام شهر، خیابان یا مکان را وارد کنید.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val center = map?.cameraPosition?.target
+        val bias = center ?: LatLng(tehran.latitude, tehran.longitude)
+        statusText.text = "در حال جست‌وجوی مکان..."
         io.execute {
-            var c: HttpURLConnection? = null
+            var connection: HttpURLConnection? = null
             try {
-                val q = URLEncoder.encode(q0, "UTF-8")
-                val center = lastLocation
-                val lat = center?.latitude ?: map?.cameraPosition?.target?.latitude ?: 35.70
-                val lon = center?.longitude ?: map?.cameraPosition?.target?.longitude ?: 51.40
-                c = URL("https://photon.komoot.io/api/?q=" + q + "&limit=5&lat=" + lat + "&lon=" + lon + "&lang=fa").openConnection() as HttpURLConnection
-                c.connectTimeout = 12000; c.readTimeout = 15000; c.setRequestProperty("User-Agent", "IranNavigator/2.0")
-                val features = JSONObject(c.inputStream.bufferedReader().use { it.readText() }).getJSONArray("features")
-                if (features.length() == 0) throw Exception("مکانی پیدا نشد")
-                val item = features.getJSONObject(0)
-                val xy = item.getJSONObject("geometry").getJSONArray("coordinates")
-                val point = LatLng(xy.getDouble(1), xy.getDouble(0))
-                val name = item.optJSONObject("properties")?.optString("name") ?: "مکان انتخاب‌شده"
-                runOnUiThread {
-                    if (origin == null) { origin = point; status.text = "مبدأ انتخاب شد: " + name }
-                    else { destination = point; status.text = "مقصد انتخاب شد: " + name }
-                    map?.animateCamera(CameraUpdateFactory.newLatLngZoom(point, 16.5), 550)
+                val q = URLEncoder.encode(query, "UTF-8")
+                val endpoint = "https://photon.komoot.io/api/?q=$q&limit=5&lat=${bias.latitude}&lon=${bias.longitude}&lang=fa"
+                connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 10000
+                    readTimeout = 15000
+                    setRequestProperty("User-Agent", "IranNavigatorPrototype/0.2")
                 }
-            } catch (e: Exception) { runOnUiThread { status.text = "جست‌وجو ناموفق بود؛ اتصال یا نام مکان را بررسی کنید." } }
-            finally { c?.disconnect() }
+                val root = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                val features = root.optJSONArray("features") ?: throw IllegalStateException("نتیجه‌ای پیدا نشد.")
+                val results = ArrayList<SearchCandidate>()
+                for (i in 0 until features.length()) {
+                    val feature = features.optJSONObject(i) ?: continue
+                    val coordinates = feature.optJSONObject("geometry")?.optJSONArray("coordinates") ?: continue
+                    if (coordinates.length() < 2) continue
+                    val properties = feature.optJSONObject("properties") ?: JSONObject()
+                    val name = properties.optString("name").ifBlank {
+                        properties.optString("street").ifBlank { properties.optString("city") }
+                    }
+                    if (name.isBlank()) continue
+                    val subtitle = listOf(
+                        properties.optString("street"),
+                        properties.optString("district"),
+                        properties.optString("city"),
+                        properties.optString("state")
+                    ).filter { it.isNotBlank() && it != name }.distinct().joinToString("، ")
+                    results += SearchCandidate(
+                        name,
+                        subtitle,
+                        NavPoint(coordinates.getDouble(1), coordinates.getDouble(0))
+                    )
+                }
+                runOnUiThread {
+                    if (results.isEmpty()) {
+                        statusText.text = "مکانی با این نام پیدا نشد."
+                    } else {
+                        val labels = results.map { it.display() }.toTypedArray()
+                        AlertDialog.Builder(this)
+                            .setTitle("نتایج جست‌وجو")
+                            .setItems(labels) { _, which ->
+                                val result = results[which]
+                                applyPointSelection(result.point, "مکان «${result.title}» انتخاب شد")
+                                map?.animateCamera(
+                                    CameraUpdateFactory.newCameraPosition(
+                                        CameraPosition.Builder()
+                                            .target(LatLng(result.point.latitude, result.point.longitude))
+                                            .zoom(16.5)
+                                            .tilt(48.0)
+                                            .build()
+                                    ),
+                                    600
+                                )
+                            }
+                            .setNegativeButton("بستن", null)
+                            .show()
+                        statusText.text = "${PersianInstructionFormatter.toPersianDigits(results.size.toString())} نتیجه پیدا شد؛ یکی را انتخاب کنید."
+                    }
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    statusText.text = "جست‌وجو انجام نشد؛ اتصال اینترنت را بررسی کنید."
+                    Toast.makeText(this, error.message ?: "خطای جست‌وجو", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                connection?.disconnect()
+            }
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    private fun calculateRoute() {
+        val start = origin
+        val end = destination
+        if (start == null || end == null) {
+            pendingStartAfterPermission = false
+            statusText.text = "ابتدا مبدأ و مقصد را انتخاب کنید."
+            return
+        }
+        if (distanceMeters(start, end) < 15.0) {
+            pendingStartAfterPermission = false
+            statusText.text = "مبدأ و مقصد بیش از حد به هم نزدیک هستند."
+            return
+        }
+
+        routeRequestToken += 1
+        val token = routeRequestToken
+        val mode = selectedMode
+        calculateButton.isEnabled = false
+        statusText.text = "در حال محاسبه مسیر واقعی خیابان‌ها..."
+        instructionText.text = "در حال دریافت مسیر..."
+        io.execute {
+            try {
+                val result = routingEngine.calculateRoute(start, end, mode)
+                runOnUiThread {
+                    if (token != routeRequestToken) return@runOnUiThread
+                    routeResult = result
+                    currentManeuverIndex = firstGuidanceIndex(result)
+                    lastAnnouncedManeuver = -1
+                    offRouteCount = 0
+                    renderRoute()
+                    renderPointMarkers()
+                    fitRoute(result)
+                    summaryText.text = "مسافت ${PersianInstructionFormatter.distance(result.distanceKm * 1000.0)}  •  زمان تقریبی ${PersianInstructionFormatter.duration(result.durationSeconds)}"
+                    updateGuidanceCard(null)
+                    statusText.text = "مسیر جاده‌ای محاسبه شد؛ برای دنبال‌کردن زنده، شروع را بزنید."
+                    calculateButton.isEnabled = true
+                    if (pendingStartAfterPermission) {
+                        pendingStartAfterPermission = false
+                        startNavigation()
+                    }
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    if (token != routeRequestToken) return@runOnUiThread
+                    calculateButton.isEnabled = true
+                    statusText.text = "محاسبه مسیر ناموفق بود."
+                    instructionText.text = error.message ?: "سرویس مسیریابی در دسترس نیست."
+                }
+            }
+        }
+    }
+
+    private fun renderRoute() {
+        val loadedStyle = style ?: return
+        val result = routeResult ?: return
+        val coordinates = result.points.map { Point.fromLngLat(it.longitude, it.latitude) }
+        if (coordinates.size < 2) return
+        val feature = Feature.fromGeometry(LineString.fromLngLats(coordinates))
+        if (routeSource == null) {
+            routeSource = GeoJsonSource("active-route-source", feature)
+            loadedStyle.addSource(routeSource!!)
+            loadedStyle.addLayer(
+                LineLayer("active-route-casing", "active-route-source").withProperties(
+                    PropertyFactory.lineColor(if (isDarkTheme) "#061A2B" else "#FFFFFF"),
+                    PropertyFactory.lineWidth(9f),
+                    PropertyFactory.lineOpacity(0.9f),
+                    PropertyFactory.lineCap("round"),
+                    PropertyFactory.lineJoin("round")
+                )
+            )
+            loadedStyle.addLayer(
+                LineLayer("active-route-line", "active-route-source").withProperties(
+                    PropertyFactory.lineColor("#16C7C1"),
+                    PropertyFactory.lineWidth(5f),
+                    PropertyFactory.lineOpacity(1f),
+                    PropertyFactory.lineCap("round"),
+                    PropertyFactory.lineJoin("round")
+                )
+            )
+        } else {
+            routeSource?.setGeoJson(feature)
+        }
+    }
+
+    private fun fitRoute(result: RouteResult) {
+        if (result.points.isEmpty()) return
+        val minLat = result.points.minOf { it.latitude }
+        val maxLat = result.points.maxOf { it.latitude }
+        val minLon = result.points.minOf { it.longitude }
+        val maxLon = result.points.maxOf { it.longitude }
+        val center = LatLng((minLat + maxLat) / 2.0, (minLon + maxLon) / 2.0)
+        val span = max(maxLat - minLat, maxLon - minLon)
+        val zoom = when {
+            span < 0.025 -> 14.0
+            span < 0.07 -> 12.5
+            span < 0.18 -> 11.0
+            span < 0.5 -> 9.5
+            else -> 7.5
+        }
+        map?.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder().target(center).zoom(zoom).tilt(46.0).bearing(0.0).build()
+            ),
+            650
+        )
+    }
+
+    private fun firstGuidanceIndex(result: RouteResult): Int {
+        val index = result.maneuvers.indexOfFirst { it.type !in 1..3 }
+        return if (index >= 0) index else 0
+    }
+
+    private fun updateGuidanceCard(distanceToManeuver: Double?) {
+        val result = routeResult ?: return
+        val maneuver = result.maneuvers.getOrNull(currentManeuverIndex)
+        if (maneuver == null) {
+            instructionText.text = "به مقصد رسیده‌اید."
+            nextStepText.text = "مسیریابی پایان یافت."
+            distanceText.text = "فاصله تا گردش بعدی: —"
+            return
+        }
+        instructionText.text = maneuver.instruction
+        val next = result.maneuvers.getOrNull(currentManeuverIndex + 1)
+        nextStepText.text = if (next == null) "گام بعدی: رسیدن به مقصد" else "پس از آن: ${next.instruction}"
+        distanceText.text = if (distanceToManeuver == null) {
+            "راهنمای مسیر آماده است."
+        } else {
+            "تا گردش بعدی: ${PersianInstructionFormatter.distance(distanceToManeuver)}"
+        }
+    }
+
+    private fun startNavigation() {
+        if (routeResult == null) {
+            pendingStartAfterPermission = true
+            calculateRoute()
+            return
+        }
+        if (!hasLocationPermission()) {
+            pendingStartAfterPermission = true
+            requestPermissions(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                locationPermissionRequest
+            )
+            return
+        }
+        isNavigating = true
+        trackingRequested = true
+        centerOnNextLocation = currentLocation == null
+        offRouteCount = 0
+        lastAnnouncedManeuver = -1
+        startLocationUpdates()
+        refreshControlButtons()
+        statusText.text = "مسیریابی زنده فعال شد؛ منتظر موقعیت دقیق GPS..."
+        if (voiceEnabled) voice?.speak("مسیریابی شروع شد. ${selectedMode.label}.")
+        currentLocation?.let { updateNavigationProgress(it) }
+    }
+
+    private fun stopNavigation() {
+        isNavigating = false
+        voice?.stop()
+        refreshControlButtons()
+        statusText.text = "مسیریابی متوقف شد."
+    }
+
+    private fun updateNavigationProgress(location: Location) {
+        val result = routeResult ?: return
+        if (result.points.isEmpty()) return
+
+        val current = NavPoint(location.latitude, location.longitude)
+        val nearestDistance = result.points.minOf { distanceMeters(current, it) }
+        if (nearestDistance > 75.0 && location.accuracy <= 40f) {
+            offRouteCount += 1
+        } else {
+            offRouteCount = 0
+        }
+
+        val maneuver = result.maneuvers.getOrNull(currentManeuverIndex)
+        if (maneuver != null) {
+            val targetIndex = maneuver.endShapeIndex.coerceIn(0, result.points.lastIndex)
+            val target = result.points[targetIndex]
+            val distance = distanceMeters(current, target)
+
+            if (targetIndex > 0 && distance < 32.0 && currentManeuverIndex < result.maneuvers.lastIndex) {
+                currentManeuverIndex += 1
+                lastAnnouncedManeuver = -1
+                updateGuidanceCard(null)
+            } else {
+                updateGuidanceCard(distance)
+                if (voiceEnabled && distance in 35.0..350.0 && lastAnnouncedManeuver != currentManeuverIndex) {
+                    val spoken = "تا ${PersianInstructionFormatter.distance(distance)} دیگر، ${maneuver.instruction}"
+                    voice?.speak(spoken)
+                    lastAnnouncedManeuver = currentManeuverIndex
+                }
+            }
+        }
+
+        val end = destination
+        if (end != null && distanceMeters(current, end) < 35.0) {
+            isNavigating = false
+            voice?.speak("به مقصد رسیدید.")
+            statusText.text = "به مقصد رسیدید."
+            refreshControlButtons()
+            return
+        }
+
+        if (offRouteCount >= 4 && System.currentTimeMillis() - lastRerouteAt > 25000L) {
+            rerouteFrom(location)
+        }
+    }
+
+    private fun rerouteFrom(location: Location) {
+        val end = destination ?: return
+        lastRerouteAt = System.currentTimeMillis()
+        offRouteCount = 0
+        val start = NavPoint(location.latitude, location.longitude)
+        val mode = selectedMode
+        val token = ++routeRequestToken
+        statusText.text = "از مسیر خارج شده‌اید؛ در حال محاسبه مسیر جدید..."
+        io.execute {
+            try {
+                val result = routingEngine.calculateRoute(start, end, mode)
+                runOnUiThread {
+                    if (token != routeRequestToken || !isNavigating) return@runOnUiThread
+                    routeResult = result
+                    currentManeuverIndex = firstGuidanceIndex(result)
+                    lastAnnouncedManeuver = -1
+                    renderRoute()
+                    fitRoute(result)
+                    summaryText.text = "مسافت باقی‌مانده ${PersianInstructionFormatter.distance(result.distanceKm * 1000.0)}  •  ${PersianInstructionFormatter.duration(result.durationSeconds)}"
+                    updateGuidanceCard(null)
+                    statusText.text = "مسیر جدید محاسبه شد."
+                    if (voiceEnabled) voice?.speak("مسیر جدید محاسبه شد.")
+                }
+            } catch (_: Exception) {
+                runOnUiThread {
+                    statusText.text = "محاسبه مجدد مسیر ناموفق بود؛ به مسیر اصلی برگردید."
+                }
+            }
+        }
+    }
+
+    private fun distanceMeters(a: NavPoint, b: NavPoint): Double {
+        val earth = 6371000.0
+        val dLat = Math.toRadians(b.latitude - a.latitude)
+        val dLon = Math.toRadians(b.longitude - a.longitude)
+        val lat1 = Math.toRadians(a.latitude)
+        val lat2 = Math.toRadians(b.latitude)
+        val h = sin(dLat / 2).pow(2.0) + cos(lat1) * cos(lat2) * sin(dLon / 2).pow(2.0)
+        return 2.0 * earth * asin(sqrt(h.coerceIn(0.0, 1.0)))
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 410 && grantResults.any { it == PackageManager.PERMISSION_GRANTED }) requestGps()
+        if (requestCode == locationPermissionRequest) {
+            if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) {
+                trackingRequested = true
+                startLocationUpdates()
+                if (pendingStartAfterPermission) {
+                    pendingStartAfterPermission = false
+                    startNavigation()
+                }
+            } else {
+                pendingStartAfterPermission = false
+                statusText.text = "برای GPS و مسیریابی زنده باید اجازه موقعیت مکانی بدهید."
+            }
+        }
     }
-    override fun onStart() { super.onStart(); mapView.onStart() }
-    override fun onResume() { super.onResume(); mapView.onResume() }
-    override fun onPause() { mapView.onPause(); super.onPause() }
-    override fun onStop() { try { lm.removeUpdates(this) } catch (_: Exception) {}; mapView.onStop(); super.onStop() }
-    override fun onLowMemory() { super.onLowMemory(); mapView.onLowMemory() }
-    override fun onSaveInstanceState(outState: Bundle) { mapView.onSaveInstanceState(outState); super.onSaveInstanceState(outState) }
+
+    override fun onStart() {
+        super.onStart()
+        mapView.onStart()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mapView.onResume()
+        if (trackingRequested && hasLocationPermission()) startLocationUpdates()
+    }
+
+    override fun onPause() {
+        stopLocationUpdates()
+        mapView.onPause()
+        super.onPause()
+    }
+
+    override fun onStop() {
+        mapView.onStop()
+        super.onStop()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        mapView.onLowMemory()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        mapView.onSaveInstanceState(outState)
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onDestroy() {
-        try { lm.removeUpdates(this) } catch (_: Exception) {}
-        tts?.stop(); tts?.shutdown(); io.shutdownNow(); mapView.onDestroy(); super.onDestroy()
+        stopLocationUpdates()
+        voice?.shutdown()
+        io.shutdownNow()
+        mapView.onDestroy()
+        super.onDestroy()
     }
+
+    private fun rounded(color: Int, radius: Int): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+        }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }
