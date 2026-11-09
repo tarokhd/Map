@@ -533,6 +533,8 @@ class MainActivity : Activity() {
     private fun applyPointSelection(point: NavPoint, message: String) {
         if (selectingOrigin) {
             origin = point
+            selectingOrigin = false
+            updateSelectionButtons()
             statusText.text = "$message؛ اکنون مقصد را انتخاب کنید."
         } else {
             destination = point
@@ -587,6 +589,8 @@ class MainActivity : Activity() {
         val location = currentLocation
         if (location != null && selectingOrigin && isFreshLocation(location) && location.accuracy <= 60f) {
             origin = NavPoint(location.latitude, location.longitude)
+            selectingOrigin = false
+            updateSelectionButtons()
             clearRoute("موقعیت فعلی به‌عنوان مبدأ ثبت شد.")
             renderPointMarkers()
             updatePointSummary()
@@ -679,6 +683,8 @@ class MainActivity : Activity() {
         if (pendingSetOriginFromGps && !fromCache && location.accuracy <= 60f) {
             pendingSetOriginFromGps = false
             origin = NavPoint(location.latitude, location.longitude)
+            selectingOrigin = false
+            updateSelectionButtons()
             clearRoute("موقعیت تازه GPS به‌عنوان مبدأ ثبت شد.")
             renderPointMarkers()
             updatePointSummary()
@@ -1010,7 +1016,7 @@ class MainActivity : Activity() {
         }
         isNavigating = true
         trackingRequested = true
-        centerOnNextLocation = currentLocation == null
+        centerOnNextLocation = currentLocation?.let { !isFreshLocation(it) } ?: true
         offRouteCount = 0
         lastAnnouncedManeuver = -1
         startLocationUpdates()
