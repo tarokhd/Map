@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: iran-navigator-android-build
-  cancel-in-progress: true
-
 jobs:
   build-debug-apk:
     name: Build Android debug APK
