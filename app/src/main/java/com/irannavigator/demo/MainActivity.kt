@@ -585,12 +585,13 @@ class MainActivity : Activity() {
         if (selectingOrigin && currentLocation == null) pendingSetOriginFromGps = true
         startLocationUpdates()
         val location = currentLocation
-        if (location != null && selectingOrigin && location.accuracy <= 60f) {
+        if (location != null && selectingOrigin && isFreshLocation(location) && location.accuracy <= 60f) {
             origin = NavPoint(location.latitude, location.longitude)
             clearRoute("موقعیت فعلی به‌عنوان مبدأ ثبت شد.")
             renderPointMarkers()
             updatePointSummary()
         } else {
+            if (selectingOrigin) pendingSetOriginFromGps = true
             statusText.text = "در حال دریافت موقعیت تازه از GPS و شبکه..."
         }
     }
@@ -661,7 +662,7 @@ class MainActivity : Activity() {
 
         if (centerOnNextLocation && !fromCache && location.accuracy <= 60f) {
             centerOnNextLocation = false
-            val bearing = if (location.hasBearing() && location.speed > 2f) location.bearing.toDouble() else 0.0
+            val bearing = if (location.speed > 2f) location.bearing.toDouble() else 0.0
             map?.animateCamera(
                 CameraUpdateFactory.newCameraPosition(
                     CameraPosition.Builder()
@@ -1016,7 +1017,7 @@ class MainActivity : Activity() {
         refreshControlButtons()
         statusText.text = "مسیریابی زنده فعال شد؛ منتظر موقعیت دقیق GPS..."
         if (voiceEnabled) voice?.speak("مسیریابی شروع شد. ${selectedMode.label}.")
-        currentLocation?.let { updateNavigationProgress(it) }
+        currentLocation?.takeIf { isFreshLocation(it) }?.let { updateNavigationProgress(it) }
     }
 
     private fun stopNavigation() {
@@ -1101,6 +1102,11 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    private fun isFreshLocation(location: Location): Boolean {
+        val age = System.currentTimeMillis() - location.time
+        return age in 0..20000
     }
 
     private fun distanceMeters(a: NavPoint, b: NavPoint): Double {
