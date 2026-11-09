@@ -2,9 +2,16 @@ name: Build Iran Navigator APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
+
+concurrency:
+  group: iran-navigator-android-build
+  cancel-in-progress: true
 
 jobs:
   build-debug-apk:
@@ -37,7 +44,9 @@ jobs:
           test -f settings.gradle.kts
           test -f app/build.gradle.kts
           test -f app/src/main/java/com/irannavigator/demo/MainActivity.kt
-          echo "Project root is valid."
+          test -f app/src/main/java/com/irannavigator/demo/RoutingEngine.kt
+          test -f app/src/main/java/com/irannavigator/demo/PersianVoice.kt
+          echo "Iran Navigator 0.2 project root is valid."
 
       - name: Build APK
         run: gradle --no-daemon :app:assembleDebug --stacktrace
@@ -46,7 +55,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: IranNavigator-Debug-APK
+          name: IranNavigator-0.2-Debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
@@ -55,7 +64,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: IranNavigator-Build-Log
+          name: IranNavigator-0.2-Build-Log
           path: app/build/outputs/**/*.log
           if-no-files-found: ignore
           retention-days: 7
