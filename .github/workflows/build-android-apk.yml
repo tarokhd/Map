@@ -2,10 +2,6 @@ name: Build Iran Navigator APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
 
 permissions:
   contents: read
