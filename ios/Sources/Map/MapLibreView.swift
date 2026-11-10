@@ -27,6 +27,10 @@ struct MapLibreView: UIViewRepresentable {
         mapView.allowsTilting = true
         mapView.allowsZooming = true
         mapView.allowsScrolling = true
+        mapView.attributionButtonPosition = .topLeft
+        mapView.attributionButtonMargins = CGPoint(x: 12, y: 82)
+        mapView.compassViewPosition = .topLeft
+        mapView.compassViewMargins = CGPoint(x: 12, y: 128)
         let initialCenter = CLLocationCoordinate2D(latitude: 35.7006, longitude: 51.4050)
         mapView.setCenter(initialCenter, zoomLevel: 13.8, animated: false)
         let initialCamera = MLNMapCamera(
@@ -83,6 +87,7 @@ struct MapLibreView: UIViewRepresentable {
         private var lastFollowCoordinate: RouteCoordinate?
         private var lastFollowTime = Date.distantPast
         private var lastSmoothedHeading: CLLocationDirection?
+        private var wasFollowingNavigation = false
         private var lastRecenterToken = 0
         private var last3DBuildingsEnabled: Bool?
 
@@ -186,7 +191,12 @@ struct MapLibreView: UIViewRepresentable {
             buildings.fillExtrusionHeight = NSExpression(forKeyPath: "render_height")
             buildings.fillExtrusionBase = NSExpression(forKeyPath: "render_min_height")
             buildings.fillExtrusionOpacity = NSExpression(forConstantValue: 0.9)
-            style.addLayer(buildings)
+
+            if let firstSymbolLayer = style.layers.first(where: { $0 is MLNSymbolStyleLayer }) {
+                style.insertLayer(buildings, below: firstSymbolLayer)
+            } else {
+                style.addLayer(buildings)
+            }
         }
 
         private func renderAccuracy(on mapView: MLNMapView, force: Bool) {
@@ -397,15 +407,44 @@ struct MapLibreView: UIViewRepresentable {
             guard parent.recenterToken != lastRecenterToken,
                   let coordinate = parent.userCoordinate else { return }
             lastRecenterToken = parent.recenterToken
-            mapView.setCenter(coordinate.clCoordinate, zoomLevel: 16.5, animated: true)
+            let camera = MLNMapCamera(
+                lookingAtCenter: coordinate.clCoordinate,
+                altitude: max(mapView.camera.altitude, 700),
+                pitch: parent.show3DBuildings ? 50 : 0,
+                heading: mapView.direction
+            )
+            mapView.setCamera(
+                camera,
+                withDuration: 0.45,
+                animationTimingFunction: nil,
+                edgePadding: UIEdgeInsets(top: 85, left: 12, bottom: 320, right: 12),
+                completionHandler: nil
+            )
         }
 
         func updateCamera(_ mapView: MLNMapView) {
             guard parent.isNavigating, let coordinate = parent.userCoordinate else {
+                if wasFollowingNavigation {
+                    let camera = MLNMapCamera(
+                        lookingAtCenter: mapView.centerCoordinate,
+                        altitude: mapView.camera.altitude,
+                        pitch: parent.show3DBuildings ? 50 : 0,
+                        heading: mapView.direction
+                    )
+                    mapView.setCamera(
+                        camera,
+                        withDuration: 0.4,
+                        animationTimingFunction: nil,
+                        edgePadding: .zero,
+                        completionHandler: nil
+                    )
+                }
+                wasFollowingNavigation = false
                 lastFollowCoordinate = nil
                 lastSmoothedHeading = nil
                 return
             }
+            wasFollowingNavigation = true
 
             let now = Date()
             let moved = lastFollowCoordinate.map {
@@ -429,7 +468,13 @@ struct MapLibreView: UIViewRepresentable {
                 pitch: 58,
                 heading: heading
             )
-            mapView.setCamera(camera, animated: true)
+            mapView.setCamera(
+                camera,
+                withDuration: 0.85,
+                animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut),
+                edgePadding: UIEdgeInsets(top: 85, left: 12, bottom: 320, right: 12),
+                completionHandler: nil
+            )
             lastFollowCoordinate = coordinate
             lastFollowTime = now
         }
