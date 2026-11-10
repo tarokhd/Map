@@ -1,0 +1,39 @@
+name: Verify Cross-Platform Navigation Parity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "ios/**"
+      - "web/**"
+      - "shared/models/navigation-contract.json"
+      - "scripts/verify_navigation_parity.py"
+      - ".github/workflows/platform-parity.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - "ios/**"
+      - "web/**"
+      - "shared/models/navigation-contract.json"
+      - "scripts/verify_navigation_parity.py"
+      - ".github/workflows/platform-parity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify Android, iOS and Web parity
+        run: python scripts/verify_navigation_parity.py

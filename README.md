@@ -11,8 +11,9 @@ web/                      پیش‌نمایش وب (MapLibre GL JS)
 backend/                  API و پایگاه داده مشترک (FastAPI + PostGIS)
 shared/
   api-contracts/          قرارداد رسمی API بین پلتفرم‌ها
-  models/                 قواعد مدل‌های مشترک
+  models/                 مدل‌ها و قرارداد ناوبری مشترک
 docs/                     معماری و راهنمای توسعه
+scripts/                  بررسی همسانی و تست سرویس‌های نقشه
 .github/workflows/        CI/CD مستقل برای هر بخش
 ~~~
 
@@ -23,7 +24,7 @@ docs/                     معماری و راهنمای توسعه
 
 ~~~bash
 cd android
-gradle --no-daemon :app:assembleDebug
+gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
 ~~~
 
 خروجی: android/app/build/outputs/apk/debug/app-debug.apk
@@ -39,14 +40,12 @@ cd ios
 xcodegen generate
 ~~~
 
-سپس ios/IranNavigator.xcodeproj را در Xcode باز کنید و یک iPhone Simulator را اجرا کنید. GitHub Actions نیز یک نسخه Simulator بدون امضای کد می‌سازد. این Artifact فایل IPA قابل نصب روی آیفون واقعی نیست؛ نصب روی دستگاه و TestFlight به امضای اپل نیاز دارد.
+سپس ios/IranNavigator.xcodeproj را در Xcode باز کنید و یک iPhone Simulator را اجرا کنید. GitHub Actions تست‌های واحد و رابط کاربری را در شبیه‌ساز اجرا می‌کند و نسخه Simulator بدون امضای کد می‌سازد. این Artifact فایل IPA قابل نصب روی آیفون واقعی نیست؛ نصب روی دستگاه و TestFlight به امضای اپل نیاز دارد.
 
 ### Web
 پیش‌نمایش وب از پوشه web منتشر می‌شود:
 
 https://tarokhd.github.io/Map/
-
-برای انتشار خودکار، در GitHub از مسیر Settings → Pages گزینه GitHub Actions را به‌عنوان Source انتخاب کنید.
 
 ### Backend و پایگاه داده
 زیرساخت محلی API و PostgreSQL/PostGIS در پوشه backend آماده شده است:
@@ -59,21 +58,20 @@ docker compose -f backend/compose.yml up --build
 - وضعیت اتصال دیتابیس: http://localhost:8000/readyz
 - مستندات API: http://localhost:8000/docs
 
-تنظیمات Compose برای توسعه محلی است و پورت‌ها فقط روی localhost منتشر می‌شوند.
+همگام‌سازی واقعی کاربران و داده‌ها هنوز فعال نشده است؛ Backend فعلاً فقط health/readiness را پیاده‌سازی می‌کند.
 
-## وضعیت یکپارچگی داده‌ها
+## کنترل کیفیت و همسانی
 
-این Monorepo و قرارداد OpenAPI و اسکیمای PostGIS را آماده می‌کند؛ اما همگام‌سازی واقعی حساب‌ها، مکان‌های ذخیره‌شده و تاریخچه مسیر بین کلاینت‌ها هنوز فعال نشده است. Backend فعلاً فقط health/readiness را پیاده‌سازی می‌کند. اتصال مستقیم کلاینت‌ها به دیتابیس مجاز نیست؛ هر دو باید از API مشترک استفاده کنند.
+- Android: تست‌های JUnit و ساخت APK
+- iOS: تست‌های Swift و UI روی شبیه‌ساز، همراه با موقعیت شبیه‌سازی‌شده تهران
+- Web: انتشار مستقل GitHub Pages
+- Platform parity: بررسی خودکار حالت‌های سفر، دستورهای گردش، داده ساختمان سه‌بعدی و قالب polyline6 در هر سه کلاینت
+- Navigation smoke: بررسی زنده سرویس‌های OpenFreeMap، Photon و Valhalla
 
-## گردش‌کارهای مستقل
+برای اجرای دستی تست سرویس‌های عمومی:
 
-- تغییرات android/: Build اندروید
-- تغییرات ios/: Build شبیه‌ساز iOS روی macOS
-- تغییرات web/: انتشار GitHub Pages
-- تغییرات backend/ یا shared/: بررسی Backend و قراردادها
+~~~bash
+python scripts/navigation_service_smoke.py
+~~~
 
-جزئیات بیشتر در docs/ARCHITECTURE.md آمده است.
-
-## نقشه و داده‌ها
-
-کلاینت‌ها از MapLibre و سرویس‌های نمونه OpenFreeMap، OpenStreetMap، Photon و Valhalla استفاده می‌کنند. سرویس‌های عمومی برای نمونه اولیه هستند و SLA یا پوشش کامل ایران را تضمین نمی‌کنند. برای انتشار واقعی باید سرویس‌های پایدار و سیاست‌های استفاده و انتساب داده رعایت شوند.
+برای انتشار واقعی باید محدودیت‌ها و شرایط استفاده سرویس‌های عمومی بررسی و سرویس پایدار انتخاب شود.

@@ -1,0 +1,31 @@
+name: Smoke Test Map, Geocoding and Routing Services
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/navigation_service_smoke.py"
+      - ".github/workflows/navigation-smoke.yml"
+      - "android/app/src/main/java/com/irannavigator/demo/RoutingEngine.kt"
+      - "ios/Sources/Services/RoutingService.swift"
+      - "web/index.html"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  navigation-services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check live map, geocoding and routing services
+        run: python scripts/navigation_service_smoke.py
