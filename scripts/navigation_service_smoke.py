@@ -62,20 +62,6 @@ def decode_polyline6(encoded):
         points.append((lat, lon))
     return points
 
-def check_maplibre_cdn():
-    assets = (
-        "https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.mjs",
-        "https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css",
-    )
-    for asset in assets:
-        request = urllib.request.Request(asset, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = response.read(1024)
-            assert response.status == 200, f"MapLibre CDN returned HTTP {response.status}"
-            assert payload, f"MapLibre CDN returned an empty asset: {asset}"
-        print(f"PASS MapLibre CDN asset: {asset.rsplit('/', 1)[-1]}")
-
-
 def check_styles():
     for name in ("dark", "positron"):
         style = request_json(f"https://tiles.openfreemap.org/styles/{name}")
@@ -167,7 +153,7 @@ def check_valhalla():
         check_route("motor_scooter")
 
 if __name__ == "__main__":
-    check_maplibre_cdn()
+    # MapLibre is vendored into the GitHub Pages artifact by web-deploy.yml.
     check_styles()
     check_photon()
     check_valhalla()
