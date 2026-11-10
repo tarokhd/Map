@@ -8,18 +8,18 @@ struct RoutingService {
         to destination: RouteCoordinate,
         mode: TravelMode
     ) async throws -> NavigationRoute {
-        let costings = mode == .motorcycle
-            ? ["motorcycle", "motor_scooter"]
-            : [mode.valhallaCosting]
-
         var lastError: Error = RoutingError.noRoute
 
-        for costing in costings {
+        for (index, costing) in mode.costingCandidates.enumerated() {
             do {
-                return try await requestRoute(from: origin, to: destination, costing: costing)
+                return try await requestRoute(
+                    from: origin,
+                    to: destination,
+                    costing: costing,
+                    usedMotorcycleFallback: index > 0
+                )
             } catch {
                 lastError = error
-                if mode != .motorcycle { break }
             }
         }
         throw lastError
@@ -28,7 +28,8 @@ struct RoutingService {
     private func requestRoute(
         from origin: RouteCoordinate,
         to destination: RouteCoordinate,
-        costing: String
+        costing: String,
+        usedMotorcycleFallback: Bool
     ) async throws -> NavigationRoute {
         let body: [String: Any] = [
             "locations": [
@@ -102,7 +103,8 @@ struct RoutingService {
             points: points,
             maneuvers: maneuvers,
             distanceKilometers: distance,
-            durationSeconds: duration
+            durationSeconds: duration,
+            usedMotorcycleFallback: usedMotorcycleFallback
         )
     }
 
