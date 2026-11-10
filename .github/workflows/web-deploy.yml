@@ -28,9 +28,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Vendor MapLibre assets for same-origin hosting
+        run: |
+          mkdir -p "$RUNNER_TEMP/maplibre-package" web/vendor
+          npm pack maplibre-gl@6.17.0 --pack-destination "$RUNNER_TEMP/maplibre-package"
+          tar -xzf "$RUNNER_TEMP/maplibre-package/maplibre-gl-6.17.0.tgz" -C "$RUNNER_TEMP/maplibre-package"
+          cp "$RUNNER_TEMP/maplibre-package/package/dist/maplibre-gl.mjs" web/vendor/
+          cp "$RUNNER_TEMP/maplibre-package/package/dist/maplibre-gl-worker.mjs" web/vendor/
+          cp "$RUNNER_TEMP/maplibre-package/package/dist/maplibre-gl.css" web/vendor/
+          cp "$RUNNER_TEMP/maplibre-package/package/LICENSE.txt" web/vendor/LICENSE.txt
+          test -s web/vendor/maplibre-gl.mjs
+          test -s web/vendor/maplibre-gl-worker.mjs
+          test -s web/vendor/maplibre-gl.css
+
       - name: Validate web entry point and JavaScript
         run: |
           test -s web/index.html
+          test -s web/vendor/maplibre-gl.mjs
+          test -s web/vendor/maplibre-gl-worker.mjs
+          test -s web/vendor/maplibre-gl.css
+          grep -q './vendor/maplibre-gl.mjs' web/index.html
+          grep -q './vendor/maplibre-gl.css' web/index.html
           node - <<'NODE'
           const fs = require('fs');
           const html = fs.readFileSync('web/index.html', 'utf8');
