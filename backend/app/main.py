@@ -3,11 +3,15 @@ import os
 import psycopg
 from fastapi import FastAPI, HTTPException
 
+from app.routing import router as routing_router
+
 app = FastAPI(
     title="Iran Navigator API",
-    version="0.1.0",
-    description="Shared API scaffold for Iran Navigator Android and Web.",
+    version="0.2.0",
+    description="Shared API scaffold and server-side routing provider proxy for Iran Navigator.",
 )
+
+app.include_router(routing_router)
 
 
 @app.get("/healthz", tags=["system"])
