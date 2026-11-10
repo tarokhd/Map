@@ -23,13 +23,18 @@ struct ContentView: View {
     @State private var isNavigating = false
     @State private var pendingOriginFromGPS = false
     @State private var pendingNavigationStart = false
+    @State private var pendingRecenterAfterGPS = false
+    @State private var showRouteSteps = false
     @State private var statusMessage = "نقشه آماده است؛ مبدأ و مقصد را انتخاب کنید."
     @State private var recenterToken = 0
     @State private var currentManeuverIndex = 0
+    @State private var lastMatchedRouteIndex = 0
     @State private var lastAnnouncedManeuver: Int?
     @State private var offRouteCount = 0
     @State private var lastRerouteAt = Date.distantPast
     @State private var distanceToNextManeuver: Double?
+
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private let routingService = RoutingService()
     private let searchService = PlaceSearchService()
@@ -84,77 +89,98 @@ struct ContentView: View {
     private var header: some View {
         HStack(spacing: 10) {
             ZStack {
-                RoundedRectangle(cornerRadius: 13)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(LinearGradient(
-                        colors: [Color(red: 0.36, green: 0.91, blue: 0.82), Color(red: 0.05, green: 0.63, blue: 0.70)],
+                        colors: [
+                            Color(red: 0.36, green: 0.91, blue: 0.82),
+                            Color(red: 0.05, green: 0.63, blue: 0.70)
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ))
                 Image(systemName: "location.north.circle.fill")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.system(size: 25, weight: .bold))
                     .foregroundStyle(Color(red: 0.02, green: 0.15, blue: 0.19))
             }
-            .frame(width: 43, height: 43)
+            .frame(width: 44, height: 44)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("IRAN NAVIGATOR")
-                    .font(.system(size: 14, weight: .black, design: .rounded))
-                    .tracking(0.7)
+                    .font(.headline.weight(.heavy))
+                    .tracking(0.4)
                     .foregroundStyle(primaryText)
                 Text("نقشه سه‌بعدی و مسیریاب")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption)
                     .foregroundStyle(secondaryText)
             }
+            .accessibilityElement(children: .combine)
 
-            Spacer(minLength: 4)
+            Spacer(minLength: 2)
+
+            Button(action: centerOnUser) {
+                Image(systemName: "location.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.bordered)
+            .tint(primaryText)
+            .accessibilityLabel("رفتن به موقعیت فعلی")
+            .accessibilityHint("نقشه را روی موقعیت مکانی شما متمرکز می‌کند.")
 
             Button {
                 theme = theme == .dark ? .light : .dark
             } label: {
                 Image(systemName: theme == .dark ? "sun.max.fill" : "moon.fill")
                     .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.bordered)
             .tint(primaryText)
+            .accessibilityLabel(theme == .dark ? "پوسته روشن" : "پوسته تاریک")
 
             Button {
                 show3DBuildings.toggle()
             } label: {
                 Text(show3DBuildings ? "3D" : "2D")
-                    .font(.system(size: 12, weight: .black))
-                    .frame(width: 40, height: 40)
+                    .font(.subheadline.weight(.heavy))
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.borderedProminent)
             .tint(Color(red: 0.04, green: 0.63, blue: 0.65))
+            .accessibilityLabel(show3DBuildings ? "تغییر به نقشه دوبعدی" : "تغییر به نقشه سه‌بعدی")
         }
         .padding(10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 19))
-        .overlay(RoundedRectangle(cornerRadius: 19).stroke(.white.opacity(0.14), lineWidth: 1))
-        .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 21, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 21, style: .continuous)
+                .stroke(primaryText.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
     }
 
     private var routePanel: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 11) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("مسیریابی هوشمند")
-                            .font(.system(size: 16, weight: .bold))
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("مسیریابی")
+                            .font(.title3.weight(.bold))
                             .foregroundStyle(primaryText)
-                        Text("انتخاب مسیر و راهنمای حرکت")
-                            .font(.system(size: 10))
+                        Text("مبدأ و مقصد را مشخص کنید")
+                            .font(.subheadline)
                             .foregroundStyle(secondaryText)
                     }
                     Spacer()
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         Circle()
                             .fill(speechService.isPersianVoiceAvailable ? Color.green : Color.orange)
-                            .frame(width: 7, height: 7)
-                        Text(speechService.isPersianVoiceAvailable ? "صدای فارسی آماده" : "صدای فارسی بررسی شود")
-                            .font(.system(size: 9, weight: .medium))
+                            .frame(width: 8, height: 8)
+                        Text(speechService.isPersianVoiceAvailable ? "صدای فارسی" : "بدون صدای فارسی")
+                            .font(.caption)
                             .foregroundStyle(secondaryText)
                     }
+                    .accessibilityElement(children: .combine)
                 }
 
                 Picker("حالت سفر", selection: $travelMode) {
@@ -166,107 +192,127 @@ struct ContentView: View {
                 .onChange(of: travelMode) { _ in
                     clearCalculatedRoute(message: "حالت سفر تغییر کرد؛ مسیر را دوباره محاسبه کنید.")
                 }
+                .accessibilityLabel("حالت سفر")
 
-                pointInput(
-                    placeholder: "آدرس یا مکان شروع",
-                    text: $originText,
-                    target: .origin,
-                    color: Color(red: 0.10, green: 0.72, blue: 0.48)
-                )
+                VStack(spacing: 9) {
+                    pointInput(
+                        placeholder: "آدرس یا مکان شروع",
+                        text: $originText,
+                        target: .origin,
+                        color: Color(red: 0.10, green: 0.72, blue: 0.48)
+                    )
 
-                pointInput(
-                    placeholder: "آدرس یا مکان مقصد",
-                    text: $destinationText,
-                    target: .destination,
-                    color: Color(red: 0.91, green: 0.34, blue: 0.39)
-                )
+                    pointInput(
+                        placeholder: "آدرس یا مکان مقصد",
+                        text: $destinationText,
+                        target: .destination,
+                        color: Color(red: 0.91, green: 0.34, blue: 0.39)
+                    )
+                }
 
                 HStack(spacing: 8) {
-                    Button {
-                        useCurrentLocationAsOrigin()
-                    } label: {
+                    Button(action: useCurrentLocationAsOrigin) {
                         Label("مبدأ = موقعیت من", systemImage: "location.fill")
-                            .font(.system(size: 10, weight: .semibold))
                             .frame(maxWidth: .infinity)
+                            .frame(minHeight: 44)
                     }
                     .buttonStyle(.bordered)
                     .tint(primaryText)
+                    .accessibilityHint("موقعیت فعلی را به‌عنوان مبدأ ثبت می‌کند.")
 
-                    Button {
-                        selectionTarget = .origin
-                        statusMessage = "برای انتخاب مبدأ، نقطه موردنظر را روی نقشه لمس کنید."
-                    } label: {
-                        Label("انتخاب روی نقشه", systemImage: "map")
-                            .font(.system(size: 10, weight: .semibold))
+                    Button(action: swapRoutePoints) {
+                        Label("جابه‌جایی", systemImage: "arrow.up.arrow.down")
                             .frame(maxWidth: .infinity)
+                            .frame(minHeight: 44)
                     }
                     .buttonStyle(.bordered)
                     .tint(primaryText)
+                    .disabled(origin == nil || destination == nil)
+                    .accessibilityLabel("جابه‌جایی مبدأ و مقصد")
                 }
 
                 Button {
                     Task { await calculateRoute() }
                 } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 9) {
                         if isCalculatingRoute {
                             ProgressView().tint(.black)
                         } else {
                             Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
                         }
-                        Text(isCalculatingRoute ? "در حال محاسبه مسیر..." : "محاسبه مسیر جاده‌ای")
+                        Text(isCalculatingRoute ? "در حال محاسبه مسیر…" : "محاسبه مسیر جاده‌ای")
                     }
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 46)
+                    .frame(minHeight: 50)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color(red: 0.12, green: 0.79, blue: 0.73))
                 .foregroundStyle(Color.black)
-                .disabled(isCalculatingRoute)
+                .disabled(isCalculatingRoute || origin == nil || destination == nil)
 
                 if let route {
                     routeSummary(route)
                     guidanceCard(route)
-                    HStack(spacing: 8) {
-                        Button {
-                            startNavigation()
-                        } label: {
-                            Label(isNavigating ? "مسیریابی فعال" : "شروع مسیریابی", systemImage: "location.north.fill")
-                                .font(.system(size: 11, weight: .bold))
+
+                    DisclosureGroup(isExpanded: $showRouteSteps) {
+                        VStack(spacing: 8) {
+                            ForEach(route.maneuvers) { maneuver in
+                                maneuverRow(maneuver, isCurrent: maneuver.id == currentManeuverIndex)
+                            }
+                        }
+                        .padding(.top, 10)
+                    } label: {
+                        Label("جزئیات مسیر و گردش‌ها", systemImage: "list.number")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(primaryText)
+                    }
+                    .tint(Color(red: 0.12, green: 0.79, blue: 0.73))
+
+                    HStack(spacing: 9) {
+                        Button(action: startNavigation) {
+                            Label("شروع مسیریابی", systemImage: "location.north.fill")
+                                .font(.subheadline.weight(.bold))
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 42)
+                                .frame(minHeight: 48)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(isNavigating ? .green : Color(red: 0.05, green: 0.65, blue: 0.64))
+                        .tint(Color(red: 0.05, green: 0.65, blue: 0.64))
                         .disabled(isNavigating)
 
-                        Button {
-                            stopNavigation()
-                        } label: {
-                            Label("توقف", systemImage: "stop.fill")
-                                .font(.system(size: 11, weight: .bold))
-                                .frame(width: 84)
-                                .frame(height: 42)
+                        Button(action: stopNavigation) {
+                            Image(systemName: "stop.fill")
+                                .font(.headline)
+                                .frame(width: 52, height: 48)
                         }
                         .buttonStyle(.bordered)
                         .tint(primaryText)
                         .disabled(!isNavigating)
+                        .accessibilityLabel("توقف مسیریابی")
                     }
                 }
 
-                Text(statusMessage)
-                    .font(.system(size: 10))
-                    .foregroundStyle(secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: isNavigating ? "location.north.circle.fill" : "info.circle")
+                        .foregroundStyle(isNavigating ? Color.green : secondaryText)
+                    Text(statusMessage)
+                        .font(.footnote)
+                        .foregroundStyle(secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 2)
             }
-            .padding(14)
+            .padding(16)
         }
         .frame(maxWidth: 560)
-        .frame(maxHeight: 430)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 23))
-        .overlay(RoundedRectangle(cornerRadius: 23).stroke(.white.opacity(0.14), lineWidth: 1))
-        .shadow(color: .black.opacity(0.22), radius: 22, y: 10)
+        .frame(maxHeight: verticalSizeClass == .compact ? 250 : 450)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(primaryText.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.18), radius: 22, y: 10)
     }
 
     private func pointInput(
@@ -275,21 +321,27 @@ struct ContentView: View {
         target: PointSelectionTarget,
         color: Color
     ) -> some View {
-        HStack(spacing: 9) {
-            Circle().fill(color).frame(width: 9, height: 9)
+        HStack(spacing: 10) {
+            Circle().fill(color).frame(width: 10, height: 10)
             TextField(placeholder, text: text)
-                .font(.system(size: 11))
+                .font(.body)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
                 .onSubmit { Task { await searchPlaces(for: target) } }
+                .accessibilityLabel(placeholder)
+
             Button {
                 Task { await searchPlaces(for: target) }
             } label: {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color(red: 0.12, green: 0.79, blue: 0.73))
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 44, height: 44)
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color(red: 0.12, green: 0.67, blue: 0.68))
+            .accessibilityLabel("جست‌وجوی \(placeholder)")
+
             Button {
                 selectionTarget = target
                 statusMessage = target == .origin
@@ -297,15 +349,73 @@ struct ContentView: View {
                     : "روی نقشه محل مقصد را انتخاب کنید."
             } label: {
                 Image(systemName: "map.pin")
-                    .font(.system(size: 14))
-                    .foregroundStyle(secondaryText)
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 44, height: 44)
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(secondaryText)
+            .accessibilityLabel("انتخاب \(placeholder) روی نقشه")
         }
-        .padding(.horizontal, 11)
-        .frame(height: 43)
+        .padding(.leading, 12)
+        .padding(.trailing, 4)
+        .frame(minHeight: 52)
         .background(theme == .dark ? Color.white.opacity(0.055) : Color.black.opacity(0.045))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.10), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(primaryText.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private func maneuverRow(_ maneuver: RouteManeuver, isCurrent: Bool) -> some View {
+        HStack(alignment: .center, spacing: 11) {
+            Image(systemName: maneuverSymbol(for: maneuver.type))
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(isCurrent ? Color.black : Color(red: 0.10, green: 0.68, blue: 0.67))
+                .frame(width: 34, height: 34)
+                .background(
+                    isCurrent ? Color(red: 0.42, green: 0.88, blue: 0.80) : primaryText.opacity(0.07),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(maneuver.instruction)
+                    .font(.subheadline.weight(isCurrent ? .bold : .medium))
+                    .foregroundStyle(primaryText)
+                if !maneuver.streetName.isEmpty {
+                    Text(maneuver.streetName)
+                        .font(.caption)
+                        .foregroundStyle(secondaryText)
+                }
+            }
+            Spacer(minLength: 4)
+            Text(PersianInstructionFormatter.distance(maneuver.lengthKilometers * 1_000))
+                .font(.caption)
+                .foregroundStyle(secondaryText)
+        }
+        .padding(9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            isCurrent ? Color(red: 0.12, green: 0.79, blue: 0.73).opacity(0.14) : primaryText.opacity(0.035),
+            in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private func maneuverSymbol(for type: Int) -> String {
+        switch type {
+        case 2, 9, 10, 11, 18, 20, 23, 37: return "arrow.turn.up.right"
+        case 3, 14, 15, 16, 19, 21, 24, 38: return "arrow.turn.up.left"
+        case 12, 13: return "arrow.uturn.down"
+        case 26, 27: return "arrow.trianglehead.2.clockwise.rotate.90"
+        case 39: return "arrow.up.to.line"
+        case 40, 41: return "figure.stairs"
+        case 42: return "door.left.hand.open"
+        case 43: return "door.left.hand.closed"
+        case 45: return "parkingsign.circle"
+        case 4, 5, 6: return "flag.checkered"
+        default: return "arrow.up"
+        }
     }
 
     private func routeSummary(_ route: NavigationRoute) -> some View {
@@ -319,12 +429,12 @@ struct ContentView: View {
     private func metric(value: String, label: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 12, weight: .bold))
+                .font(.subheadline.weight(.bold))
                 .foregroundStyle(primaryText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(label)
-                .font(.system(size: 9))
+                .font(.caption2)
                 .foregroundStyle(secondaryText)
         }
         .frame(maxWidth: .infinity)
@@ -343,14 +453,14 @@ struct ContentView: View {
 
         return VStack(alignment: .leading, spacing: 5) {
             Text("راهنمای مسیر")
-                .font(.system(size: 9, weight: .black))
+                .font(.caption.weight(.heavy))
                 .foregroundStyle(Color(red: 0.12, green: 0.79, blue: 0.73))
             Text(maneuver?.instruction ?? "به مقصد رسیده‌اید.")
-                .font(.system(size: 13, weight: .bold))
+                .font(.headline)
                 .foregroundStyle(primaryText)
             if let next {
                 Text("پس از آن: \(next.instruction)")
-                    .font(.system(size: 10))
+                    .font(.footnote)
                     .foregroundStyle(secondaryText)
             }
             if let distanceToNextManeuver {
