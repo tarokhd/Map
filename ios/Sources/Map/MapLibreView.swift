@@ -263,7 +263,7 @@ struct MapLibreView: UIViewRepresentable {
                 lookingAtCenter: coordinate.clCoordinate,
                 altitude: 850,
                 pitch: 58,
-                heading: parent.userHeading ?? 0
+                heading: parent.userHeading ?? mapView.direction
             )
             mapView.setCamera(camera, animated: true)
             lastFollowCoordinate = coordinate
