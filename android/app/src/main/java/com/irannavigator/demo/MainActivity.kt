@@ -90,6 +90,7 @@ class MainActivity : Activity() {
     private var pendingSetOriginFromGps = false
     private var pendingStartAfterPermission = false
     private var currentManeuverIndex = 0
+    private var lastMatchedRouteIndex = 0
     private var lastAnnouncedManeuver = -1
     private var offRouteCount = 0
     private var lastRerouteAt = 0L
@@ -558,9 +559,13 @@ class MainActivity : Activity() {
         routeRequestToken += 1
         routeResult = null
         isNavigating = false
+        centerOnNextLocation = false
         currentManeuverIndex = 0
+        lastMatchedRouteIndex = 0
         lastAnnouncedManeuver = -1
         offRouteCount = 0
+        voice?.stop()
+        resetCameraPadding()
         try {
             style?.removeLayer("active-route-line")
             style?.removeLayer("active-route-casing")
@@ -891,6 +896,7 @@ class MainActivity : Activity() {
                     if (token != routeRequestToken) return@runOnUiThread
                     routeResult = result
                     currentManeuverIndex = firstGuidanceIndex(result)
+                    lastMatchedRouteIndex = 0
                     lastAnnouncedManeuver = -1
                     offRouteCount = 0
                     renderRoute()
@@ -898,7 +904,11 @@ class MainActivity : Activity() {
                     fitRoute(result)
                     summaryText.text = "مسافت ${PersianInstructionFormatter.distance(result.distanceKm * 1000.0)}  •  زمان تقریبی ${PersianInstructionFormatter.duration(result.durationSeconds)}"
                     updateGuidanceCard(null)
-                    statusText.text = "مسیر جاده‌ای محاسبه شد؛ برای دنبال‌کردن زنده، شروع را بزنید."
+                    statusText.text = if (result.usedMotorcycleFallback) {
+                        "پروفایل اختصاصی موتورسیکلت موجود نبود؛ مسیر با پروفایل اسکوتر محاسبه شد."
+                    } else {
+                        "مسیر جاده‌ای محاسبه شد؛ برای دنبال‌کردن زنده، شروع را بزنید."
+                    }
                     calculateButton.isEnabled = true
                     if (pendingStartAfterPermission) {
                         pendingStartAfterPermission = false
@@ -1019,6 +1029,7 @@ class MainActivity : Activity() {
         trackingRequested = true
         centerOnNextLocation = true
         offRouteCount = 0
+        lastMatchedRouteIndex = 0
         lastAnnouncedManeuver = -1
         lastCameraFollowAt = 0L
         lastCameraLocation = null
@@ -1121,8 +1132,10 @@ class MainActivity : Activity() {
         if (result.points.isEmpty()) return
 
         val current = NavPoint(location.latitude, location.longitude)
-        val nearestDistance = result.points.minOf { distanceMeters(current, it) }
-        if (nearestDistance > 75.0 && location.accuracy <= 40f) {
+        val nearest = nearestRoutePoint(current, result.points, lastMatchedRouteIndex)
+        lastMatchedRouteIndex = max(lastMatchedRouteIndex, nearest.index)
+
+        if (nearest.distanceMeters > 75.0 && location.accuracy <= 40f) {
             offRouteCount += 1
         } else {
             offRouteCount = 0
@@ -1131,10 +1144,10 @@ class MainActivity : Activity() {
         val maneuver = result.maneuvers.getOrNull(currentManeuverIndex)
         if (maneuver != null) {
             val targetIndex = maneuver.endShapeIndex.coerceIn(0, result.points.lastIndex)
-            val target = result.points[targetIndex]
-            val distance = distanceMeters(current, target)
+            val distance = distanceAlongRoute(result.points, lastMatchedRouteIndex, targetIndex)
 
-            if (targetIndex > 0 && distance < 32.0 && currentManeuverIndex < result.maneuvers.lastIndex) {
+            if (targetIndex > 0 && lastMatchedRouteIndex >= targetIndex - 2 &&
+                currentManeuverIndex < result.maneuvers.lastIndex) {
                 currentManeuverIndex += 1
                 lastAnnouncedManeuver = -1
                 updateGuidanceCard(null)
@@ -1151,8 +1164,10 @@ class MainActivity : Activity() {
         val end = destination
         if (end != null && distanceMeters(current, end) < 35.0) {
             isNavigating = false
+            centerOnNextLocation = false
             voice?.speak("به مقصد رسیدید.")
             statusText.text = "به مقصد رسیدید."
+            resetCameraPadding()
             refreshControlButtons()
             return
         }
@@ -1160,6 +1175,38 @@ class MainActivity : Activity() {
         if (offRouteCount >= 4 && System.currentTimeMillis() - lastRerouteAt > 25000L) {
             rerouteFrom(location)
         }
+    }
+
+    private data class RouteMatch(val index: Int, val distanceMeters: Double)
+
+    private fun nearestRoutePoint(
+        point: NavPoint,
+        points: List<NavPoint>,
+        previousIndex: Int
+    ): RouteMatch {
+        var bestIndex = previousIndex.coerceIn(0, points.lastIndex)
+        var bestDistance = Double.MAX_VALUE
+        val startIndex = (previousIndex - 3).coerceAtLeast(0)
+
+        for (index in startIndex..points.lastIndex) {
+            val distance = distanceMeters(point, points[index])
+            if (distance < bestDistance) {
+                bestDistance = distance
+                bestIndex = index
+            }
+        }
+        return RouteMatch(bestIndex, bestDistance)
+    }
+
+    private fun distanceAlongRoute(points: List<NavPoint>, startIndex: Int, endIndex: Int): Double {
+        if (points.size < 2) return 0.0
+        val start = startIndex.coerceIn(0, points.lastIndex)
+        val end = endIndex.coerceIn(start, points.lastIndex)
+        var distance = 0.0
+        for (index in start until end) {
+            distance += distanceMeters(points[index], points[index + 1])
+        }
+        return distance
     }
 
     private fun rerouteFrom(location: Location) {
