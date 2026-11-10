@@ -15,6 +15,7 @@ The Web client is pinned to MapLibre GL JS 5.24.0 using the UMD browser bundle. 
 - web/: static MapLibre GL JS preview, deployed independently to GitHub Pages.
 - backend/: FastAPI and PostgreSQL/PostGIS development scaffold.
 - shared/models/navigation-contract.json: canonical travel modes, key maneuver instructions, 3D attributes and route geometry format.
+- shared/models/routing-provider-contract.json: provider capabilities, selection policy and normalized route response contract.
 - scripts/: cross-platform parity and live service smoke checks.
 
 ## Cross-platform navigation contract
@@ -33,6 +34,15 @@ Route geometry is requested as polyline6. GeoJSON coordinates use [longitude, la
 - Web: GitHub Pages deploy validates the inline application JavaScript.
 - Platform parity: static contract checks compare critical travel modes, maneuver instructions, GPS and 3D building integration across the three clients.
 - Navigation service smoke tests: live OpenFreeMap styles, Photon geocoding and Valhalla route profiles are checked on navigation-related pushes and manual dispatch.
+
+## Routing provider strategy
+
+- Valhalla remains the baseline non-traffic routing provider for the current prototype.
+- Neshan Direction API is the candidate traffic-aware provider for car and motorcycle. The current official API documentation describes live-traffic routing, alternative routes, waypoints, traffic-zone avoidance and odd-even-zone avoidance.
+- Neshan credentials must be held by the Backend only; never embed the Api-Key in Android, iOS, Web or a public repository.
+- Walking remains on the baseline provider until a traffic-aware pedestrian provider is explicitly verified.
+- If a live-traffic provider is unavailable, the app must not silently label a non-traffic route as traffic-aware. Any fallback must be clearly identified in the normalized response.
+- The API contract is planned in shared/api-contracts/openapi.yaml; the Backend currently does not implement route proxying.
 
 ## Shared data flow
 
