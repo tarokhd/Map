@@ -62,7 +62,7 @@ docker compose -f backend/compose.yml up --build
 - وضعیت اتصال دیتابیس: http://localhost:8000/readyz
 - مستندات API: http://localhost:8000/docs
 
-همگام‌سازی واقعی کاربران و داده‌ها هنوز فعال نشده است؛ Backend فعلاً فقط health/readiness را پیاده‌سازی می‌کند.
+Backend اکنون health/readiness و endpoint مسیریابی مشترک را پیاده‌سازی می‌کند. اتصال واقعی Neshan به NESHAN_API_KEY نیاز دارد؛ ذخیره مکان، تاریخچه مسیر و همگام‌سازی کاربران هنوز فعال نشده‌اند.
 
 ## کنترل کیفیت و همسانی
 
