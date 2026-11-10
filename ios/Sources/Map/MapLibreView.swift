@@ -26,11 +26,15 @@ struct MapLibreView: UIViewRepresentable {
         mapView.allowsTilting = true
         mapView.allowsZooming = true
         mapView.allowsScrolling = true
-        mapView.setCenter(
-            CLLocationCoordinate2D(latitude: 35.7006, longitude: 51.4050),
-            zoomLevel: 13.8,
-            animated: false
+        let initialCenter = CLLocationCoordinate2D(latitude: 35.7006, longitude: 51.4050)
+        mapView.setCenter(initialCenter, zoomLevel: 13.8, animated: false)
+        let initialCamera = MLNMapCamera(
+            lookingAtCenter: initialCenter,
+            altitude: mapView.camera.altitude,
+            pitch: show3DBuildings ? 50 : 0,
+            heading: 0
         )
+        mapView.setCamera(initialCamera, animated: false)
 
         let tap = UITapGestureRecognizer(
             target: context.coordinator,
@@ -75,7 +79,9 @@ struct MapLibreView: UIViewRepresentable {
         private var lastRoutePoints: [RouteCoordinate] = []
         private var lastFollowCoordinate: RouteCoordinate?
         private var lastFollowTime = Date.distantPast
+        private var lastSmoothedHeading: CLLocationDirection?
         private var lastRecenterToken = 0
+        private var last3DBuildingsEnabled: Bool?
 
         init(parent: MapLibreView) {
             self.parent = parent
@@ -95,16 +101,59 @@ struct MapLibreView: UIViewRepresentable {
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             addBuildingLayer(to: style)
+            last3DBuildingsEnabled = parent.show3DBuildings
             renderRoute(on: mapView, force: true)
             renderAnnotations(on: mapView, force: true)
         }
 
+        func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {
+            guard let point = annotation as? MLNPointAnnotation else { return nil }
+
+            let isUser = point.title == "موقعیت شما"
+            let isOrigin = point.title == "مبدأ"
+            let reuseIdentifier = isUser ? "iran-user-marker" : (isOrigin ? "iran-origin-marker" : "iran-destination-marker")
+            let marker = mapView.dequeueReusableAnnotationView(withIdentifier: reuseIdentifier)
+                ?? MLNAnnotationView(annotation: annotation, reuseIdentifier: reuseIdentifier)
+
+            let size: CGFloat = isUser ? 22 : 25
+            marker.annotation = annotation
+            marker.frame = CGRect(x: 0, y: 0, width: size, height: size)
+            marker.backgroundColor = isUser
+                ? UIColor(red: 0.08, green: 0.53, blue: 0.98, alpha: 1)
+                : (isOrigin
+                    ? UIColor(red: 0.10, green: 0.72, blue: 0.48, alpha: 1)
+                    : UIColor(red: 0.91, green: 0.34, blue: 0.39, alpha: 1))
+            marker.layer.cornerRadius = size / 2
+            marker.layer.borderWidth = 3
+            marker.layer.borderColor = UIColor.white.cgColor
+            marker.layer.shadowColor = UIColor.black.cgColor
+            marker.layer.shadowOpacity = 0.24
+            marker.layer.shadowRadius = 5
+            marker.layer.shadowOffset = CGSize(width: 0, height: 2)
+            marker.centerOffset = .zero
+            marker.canShowCallout = !isUser
+            return marker
+        }
+
         func updateMapContent(_ mapView: MLNMapView) {
             guard let style = mapView.style else { return }
-            if parent.show3DBuildings {
+            if last3DBuildingsEnabled != parent.show3DBuildings {
+                if parent.show3DBuildings {
+                    addBuildingLayer(to: style)
+                } else if let layer = style.layer(withIdentifier: "iran-buildings-3d") {
+                    style.removeLayer(layer)
+                }
+
+                let camera = MLNMapCamera(
+                    lookingAtCenter: mapView.centerCoordinate,
+                    altitude: mapView.camera.altitude,
+                    pitch: parent.show3DBuildings ? 50 : 0,
+                    heading: mapView.direction
+                )
+                mapView.setCamera(camera, animated: true)
+                last3DBuildingsEnabled = parent.show3DBuildings
+            } else if parent.show3DBuildings {
                 addBuildingLayer(to: style)
-            } else if let layer = style.layer(withIdentifier: "iran-buildings-3d") {
-                style.removeLayer(layer)
             }
             renderRoute(on: mapView, force: false)
             renderAnnotations(on: mapView, force: false)
@@ -123,7 +172,7 @@ struct MapLibreView: UIViewRepresentable {
             )
             buildings.sourceLayerIdentifier = "building"
             buildings.minimumZoomLevel = 14.5
-            buildings.predicate = NSPredicate(format: "render_height != NIL")
+            buildings.predicate = NSPredicate(format: "render_height != NIL AND hide_3d != YES")
             buildings.fillExtrusionColor = NSExpression(
                 forConstantValue: parent.theme == .dark
                     ? UIColor(red: 0.39, green: 0.49, blue: 0.60, alpha: 1)
@@ -250,6 +299,7 @@ struct MapLibreView: UIViewRepresentable {
         func updateCamera(_ mapView: MLNMapView) {
             guard parent.isNavigating, let coordinate = parent.userCoordinate else {
                 lastFollowCoordinate = nil
+                lastSmoothedHeading = nil
                 return
             }
 
@@ -259,15 +309,43 @@ struct MapLibreView: UIViewRepresentable {
             } ?? .greatestFiniteMagnitude
             guard moved >= 4, now.timeIntervalSince(lastFollowTime) >= 1.0 else { return }
 
+            let currentHeading = lastSmoothedHeading ?? mapView.direction
+            let targetHeading = parent.userHeading ?? inferredBearing(
+                from: lastFollowCoordinate,
+                to: coordinate
+            ) ?? currentHeading
+            let delta = ((targetHeading - currentHeading + 540).truncatingRemainder(dividingBy: 360)) - 180
+            let heading = (currentHeading + delta * 0.28 + 360)
+                .truncatingRemainder(dividingBy: 360)
+            lastSmoothedHeading = heading
+
             let camera = MLNMapCamera(
                 lookingAtCenter: coordinate.clCoordinate,
                 altitude: 850,
                 pitch: 58,
-                heading: parent.userHeading ?? mapView.direction
+                heading: heading
             )
             mapView.setCamera(camera, animated: true)
             lastFollowCoordinate = coordinate
             lastFollowTime = now
+        }
+
+        private func inferredBearing(
+            from previous: RouteCoordinate?,
+            to current: RouteCoordinate
+        ) -> CLLocationDirection? {
+            guard let previous,
+                  previous.location.distance(from: current.location) >= 6 else {
+                return nil
+            }
+            let startLatitude = previous.latitude * .pi / 180
+            let endLatitude = current.latitude * .pi / 180
+            let deltaLongitude = (current.longitude - previous.longitude) * .pi / 180
+            let y = sin(deltaLongitude) * cos(endLatitude)
+            let x = cos(startLatitude) * sin(endLatitude)
+                - sin(startLatitude) * cos(endLatitude) * cos(deltaLongitude)
+            return (atan2(y, x) * 180 / .pi + 360)
+                .truncatingRemainder(dividingBy: 360)
         }
     }
 }
