@@ -580,8 +580,30 @@ struct ContentView: View {
         assignPoint(coordinate, target: target, label: "نقطه انتخاب‌شده روی نقشه")
     }
 
+    private func centerOnUser() {
+        if let location = locationService.location,
+           NavigationLocationQuality.isUsable(
+                horizontalAccuracy: location.horizontalAccuracy,
+                timestamp: location.timestamp,
+                maximumAccuracy: 100
+           ) {
+            recenterToken += 1
+            statusMessage = "نقشه روی موقعیت فعلی متمرکز شد."
+            return
+        }
+
+        pendingRecenterAfterGPS = true
+        locationService.requestAndStart()
+        statusMessage = "در حال دریافت موقعیت تازه برای تمرکز نقشه..."
+    }
+
     private func useCurrentLocationAsOrigin() {
-        if let location = locationService.location {
+        if let location = locationService.location,
+           NavigationLocationQuality.isUsable(
+                horizontalAccuracy: location.horizontalAccuracy,
+                timestamp: location.timestamp,
+                maximumAccuracy: 60
+           ) {
             assignPoint(
                 RouteCoordinate(location: location),
                 target: .origin,
@@ -591,11 +613,32 @@ struct ContentView: View {
         } else {
             pendingOriginFromGPS = true
             locationService.requestAndStart()
-            statusMessage = "در حال دریافت موقعیت تازه از GPS..."
+            statusMessage = "در حال دریافت موقعیت دقیق و تازه از GPS..."
         }
     }
 
+    private func swapRoutePoints() {
+        guard origin != nil, destination != nil else { return }
+        let previousOrigin = origin
+        origin = destination
+        destination = previousOrigin
+
+        let previousOriginText = originText
+        originText = destinationText
+        destinationText = previousOriginText
+
+        clearCalculatedRoute(message: "مبدأ و مقصد جابه‌جا شدند؛ مسیر را دوباره محاسبه کنید.")
+    }
+
     private func handleLocationUpdate(_ location: CLLocation) {
+        guard NavigationLocationQuality.isFresh(timestamp: location.timestamp) else { return }
+
+        if pendingRecenterAfterGPS && location.horizontalAccuracy <= 100 {
+            pendingRecenterAfterGPS = false
+            recenterToken += 1
+            statusMessage = "موقعیت تازه دریافت شد؛ نقشه روی شما متمرکز شد."
+        }
+
         if pendingOriginFromGPS && location.horizontalAccuracy <= 60 {
             pendingOriginFromGPS = false
             assignPoint(
@@ -637,10 +680,14 @@ struct ContentView: View {
             )
             route = result
             currentManeuverIndex = firstGuidanceIndex(in: result)
+            lastMatchedRouteIndex = 0
             distanceToNextManeuver = nil
             lastAnnouncedManeuver = nil
             offRouteCount = 0
-            statusMessage = "مسیر جاده‌ای آماده است."
+            showRouteSteps = false
+            statusMessage = result.usedMotorcycleFallback
+                ? "پروفایل موتورسیکلت در سرویس موجود نبود؛ مسیر با پروفایل اسکوتر محاسبه شد."
+                : "مسیر جاده‌ای آماده است."
         } catch {
             statusMessage = error.localizedDescription
         }
@@ -656,7 +703,12 @@ struct ContentView: View {
             statusMessage = "ابتدا مسیر را محاسبه کنید."
             return
         }
-        guard let location = locationService.location, location.horizontalAccuracy <= 65 else {
+        guard let location = locationService.location,
+              NavigationLocationQuality.isUsable(
+                horizontalAccuracy: location.horizontalAccuracy,
+                timestamp: location.timestamp,
+                maximumAccuracy: 65
+              ) else {
             pendingNavigationStart = true
             locationService.requestAndStart()
             statusMessage = "برای شروع، در حال دریافت موقعیت دقیق GPS..."
@@ -670,7 +722,8 @@ struct ContentView: View {
         offRouteCount = 0
         lastAnnouncedManeuver = nil
         lastRerouteAt = .distantPast
-        locationService.startUpdating()
+        lastMatchedRouteIndex = 0
+        locationService.startNavigationUpdates(for: travelMode)
         if speechService.isPersianVoiceAvailable {
             speechService.speak("مسیریابی شروع شد. حالت \(travelMode.title).")
         } else {
@@ -682,6 +735,7 @@ struct ContentView: View {
     private func stopNavigation() {
         isNavigating = false
         pendingNavigationStart = false
+        lastMatchedRouteIndex = 0
         speechService.stop()
         locationService.stopUpdating()
         statusMessage = "مسیریابی متوقف شد."
@@ -690,7 +744,12 @@ struct ContentView: View {
     private func updateNavigationProgress(_ location: CLLocation) {
         guard let route, !route.points.isEmpty else { return }
         let current = RouteCoordinate(location: location)
-        let nearest = nearestRoutePoint(to: current, in: route.points)
+        let nearest = nearestRoutePoint(
+            to: current,
+            in: route.points,
+            startingAt: lastMatchedRouteIndex
+        )
+        lastMatchedRouteIndex = max(lastMatchedRouteIndex, nearest.index)
 
         if nearest.distance > 80 && location.horizontalAccuracy <= 35 {
             offRouteCount += 1
@@ -746,6 +805,7 @@ struct ContentView: View {
             originText = "موقعیت فعلی"
             route = updated
             currentManeuverIndex = firstGuidanceIndex(in: updated)
+            lastMatchedRouteIndex = 0
             lastAnnouncedManeuver = nil
             offRouteCount = 0
             distanceToNextManeuver = nil
@@ -758,12 +818,15 @@ struct ContentView: View {
 
     private func nearestRoutePoint(
         to coordinate: RouteCoordinate,
-        in points: [RouteCoordinate]
+        in points: [RouteCoordinate],
+        startingAt previousIndex: Int
     ) -> (index: Int, distance: Double) {
-        var bestIndex = 0
+        var bestIndex = min(max(0, previousIndex), max(0, points.count - 1))
         var bestDistance = Double.greatestFiniteMagnitude
-        for (index, point) in points.enumerated() {
-            let distance = coordinate.location.distance(from: point.location)
+        let startIndex = max(0, previousIndex - 3)
+
+        for index in startIndex..<points.count {
+            let distance = coordinate.location.distance(from: points[index].location)
             if distance < bestDistance {
                 bestDistance = distance
                 bestIndex = index
@@ -787,10 +850,16 @@ struct ContentView: View {
     }
 
     private func clearCalculatedRoute(message: String?) {
+        if isNavigating || pendingNavigationStart {
+            stopNavigation()
+        }
         route = nil
-        isNavigating = false
+        pendingNavigationStart = false
         currentManeuverIndex = 0
+        lastMatchedRouteIndex = 0
+        lastAnnouncedManeuver = nil
         distanceToNextManeuver = nil
+        showRouteSteps = false
         speechService.stop()
         if let message { statusMessage = message }
     }
