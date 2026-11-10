@@ -1225,6 +1225,7 @@ class MainActivity : Activity() {
                     routeResult = result
                     origin = start
                     currentManeuverIndex = firstGuidanceIndex(result)
+                    lastMatchedRouteIndex = 0
                     lastAnnouncedManeuver = -1
                     renderRoute()
                     renderPointMarkers()
