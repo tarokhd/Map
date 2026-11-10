@@ -27,6 +27,37 @@ paths:
           description: Database is reachable
         "503":
           description: Database is unavailable
+  /api/v1/routes:
+    post:
+      security: []
+      summary: Calculate a route using the selected provider adapter
+      description: >-
+        The backend keeps provider credentials server-side. For live traffic,
+        car and motorcycle routes may use the licensed Neshan Direction API.
+        Walking currently uses Valhalla. A non-traffic fallback must be
+        explicitly identified and must never be labeled traffic-aware.
+      x-implementation-status: planned
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteRequest"
+      responses:
+        "200":
+          description: One or more normalized route options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteResponse"
+        "400":
+          description: Invalid coordinates or unsupported request options
+        "429":
+          description: Route request rate limit exceeded
+        "502":
+          description: Routing provider returned an invalid response
+        "503":
+          description: Requested routing provider is unavailable or not configured
   /api/v1/me/places:
     get:
       summary: List the authenticated user's saved places
@@ -130,6 +161,126 @@ components:
           type: number
           minimum: -180
           maximum: 180
+    RouteRequest:
+      type: object
+      required: [origin, destination, travel_mode]
+      properties:
+        origin:
+          $ref: "#/components/schemas/Coordinates"
+        destination:
+          $ref: "#/components/schemas/Coordinates"
+        waypoints:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/Coordinates"
+        travel_mode:
+          type: string
+          enum: [car, motorcycle, walking]
+        traffic_preference:
+          type: string
+          enum: [live, none]
+          default: live
+        alternatives:
+          type: boolean
+          default: true
+        avoid_traffic_zone:
+          type: boolean
+          default: false
+        avoid_odd_even_zone:
+          type: boolean
+          default: false
+        bearing:
+          type: integer
+          minimum: 0
+          maximum: 360
+    RouteResponse:
+      type: object
+      required: [options, requested_traffic_preference, generated_at]
+      properties:
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteOption"
+        requested_traffic_preference:
+          type: string
+          enum: [live, none]
+        generated_at:
+          type: string
+          format: date-time
+    RouteOption:
+      type: object
+      required: [id, provider, traffic_aware, distance_m, duration_s, overview_geometry, legs]
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+          enum: [neshan, valhalla]
+        traffic_aware:
+          type: boolean
+        fallback_used:
+          type: boolean
+          default: false
+        fallback_reason:
+          type: [string, "null"]
+        distance_m:
+          type: number
+          minimum: 0
+        duration_s:
+          type: number
+          minimum: 0
+        overview_geometry:
+          $ref: "#/components/schemas/EncodedGeometry"
+        legs:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteLeg"
+    RouteLeg:
+      type: object
+      required: [distance_m, duration_s, steps]
+      properties:
+        summary:
+          type: string
+        distance_m:
+          type: number
+          minimum: 0
+        duration_s:
+          type: number
+          minimum: 0
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteManeuver"
+    RouteManeuver:
+      type: object
+      required: [instruction, distance_m, duration_s]
+      properties:
+        instruction:
+          type: string
+        street_name:
+          type: string
+        type:
+          type: string
+        modifier:
+          type: string
+        distance_m:
+          type: number
+          minimum: 0
+        duration_s:
+          type: number
+          minimum: 0
+        geometry:
+          $ref: "#/components/schemas/EncodedGeometry"
+    EncodedGeometry:
+      type: object
+      required: [encoding, value]
+      properties:
+        encoding:
+          type: string
+          enum: [encoded-polyline, polyline6]
+        value:
+          type: string
     SavedPlace:
       type: object
       required: [id, title, location, created_at]
