@@ -183,6 +183,9 @@ components:
         alternatives:
           type: boolean
           default: true
+        allow_non_traffic_fallback:
+          type: boolean
+          default: false
         avoid_traffic_zone:
           type: boolean
           default: false
@@ -263,6 +266,9 @@ components:
           type: string
         modifier:
           type: string
+        end_shape_index:
+          type: [integer, "null"]
+          minimum: 0
         distance_m:
           type: number
           minimum: 0
@@ -278,6 +284,10 @@ components:
         encoding:
           type: string
           enum: [encoded-polyline, polyline6]
+        precision:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 8
         value:
           type: string
     SavedPlace:
