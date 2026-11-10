@@ -2,8 +2,12 @@
 import json
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 contract = json.loads((ROOT / "shared/models/navigation-contract.json").read_text(encoding="utf-8"))
+routing_contract = json.loads((ROOT / "shared/models/routing-provider-contract.json").read_text(encoding="utf-8"))
+openapi = yaml.safe_load((ROOT / "shared/api-contracts/openapi.yaml").read_text(encoding="utf-8"))
 
 sources = {
     "Android": {
@@ -62,6 +66,35 @@ require("iOS", "location", "kCLLocationAccuracyBestForNavigation", "high-accurac
 require("iOS", "routing", '"shape_format": "polyline6"', "polyline6 route request")
 require("iOS", "location", "NavigationLocationQuality.isUsable", "fresh and accurate GPS validation")
 require("iOS", "view", "distanceAlongRoute", "distance-along-route guidance progress")
+
+# Provider contract: Neshan is traffic-aware only for the officially documented
+# car and motorcycle Direction API. Credentials remain server-side.
+neshan = routing_contract["providers"]["neshan"]
+if neshan.get("requiresBackendProxy") is not True:
+    errors.append("Routing contract: Neshan provider must be called through the backend proxy")
+if neshan.get("apiKeyMayBeIncludedInClient") is not False:
+    errors.append("Routing contract: Neshan API key must never be shipped in clients")
+if set(neshan.get("supportedModes", [])) != {"car", "motorcycle"}:
+    errors.append("Routing contract: Neshan traffic routing modes must match the verified provider documentation")
+if neshan.get("trafficAware") is not True:
+    errors.append("Routing contract: Neshan traffic provider must be marked traffic-aware")
+if routing_contract["providerSelection"]["walking"]["trafficRequested"] != "valhalla":
+    errors.append("Routing contract: walking must not be sent to the Neshan car/motorcycle traffic endpoint")
+
+route_path = openapi.get("paths", {}).get("/api/v1/routes", {}).get("post")
+if not route_path:
+    errors.append("OpenAPI: planned POST /api/v1/routes endpoint is missing")
+else:
+    if route_path.get("x-implementation-status") != "planned":
+        errors.append("OpenAPI: route proxy must remain marked planned until implemented")
+    request_schema = route_path.get("requestBody", {}).get("content", {}).get("application/json", {}).get("schema", {})
+    if request_schema.get("$ref") != "#/components/schemas/RouteRequest":
+        errors.append("OpenAPI: route request must use the shared RouteRequest schema")
+
+route_schemas = openapi.get("components", {}).get("schemas", {})
+for schema_name in ("RouteRequest", "RouteResponse", "RouteOption", "RouteLeg", "RouteManeuver", "EncodedGeometry"):
+    if schema_name not in route_schemas:
+        errors.append(f"OpenAPI: missing normalized routing schema {schema_name}")
 
 require("Web", "app", 'src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"', "restored MapLibre GL JS UMD script")
 require("Web", "app", 'href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css"', "restored MapLibre CSS")
