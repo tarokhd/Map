@@ -10,6 +10,7 @@ struct MapLibreView: UIViewRepresentable {
     let destination: RouteCoordinate?
     let routePoints: [RouteCoordinate]
     let userCoordinate: RouteCoordinate?
+    let userAccuracy: CLLocationAccuracy?
     let userHeading: CLLocationDirection?
     let isNavigating: Bool
     let recenterToken: Int
@@ -73,6 +74,8 @@ struct MapLibreView: UIViewRepresentable {
         private var originAnnotation: MLNPointAnnotation?
         private var destinationAnnotation: MLNPointAnnotation?
         private var userAnnotation: MLNPointAnnotation?
+        private var lastAccuracyCenter: RouteCoordinate?
+        private var lastAccuracyMeters: CLLocationAccuracy?
         private var lastOrigin: RouteCoordinate?
         private var lastDestination: RouteCoordinate?
         private var lastUserCoordinate: RouteCoordinate?
@@ -102,6 +105,7 @@ struct MapLibreView: UIViewRepresentable {
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             addBuildingLayer(to: style)
             last3DBuildingsEnabled = parent.show3DBuildings
+            renderAccuracy(on: mapView, force: true)
             renderRoute(on: mapView, force: true)
             renderAnnotations(on: mapView, force: true)
         }
@@ -155,6 +159,7 @@ struct MapLibreView: UIViewRepresentable {
             } else if parent.show3DBuildings {
                 addBuildingLayer(to: style)
             }
+            renderAccuracy(on: mapView, force: false)
             renderRoute(on: mapView, force: false)
             renderAnnotations(on: mapView, force: false)
         }
@@ -182,6 +187,105 @@ struct MapLibreView: UIViewRepresentable {
             buildings.fillExtrusionBase = NSExpression(forKeyPath: "render_min_height")
             buildings.fillExtrusionOpacity = NSExpression(forConstantValue: 0.9)
             style.addLayer(buildings)
+        }
+
+        private func renderAccuracy(on mapView: MLNMapView, force: Bool) {
+            guard let style = mapView.style else { return }
+
+            guard let center = parent.userCoordinate,
+                  let accuracy = parent.userAccuracy,
+                  accuracy >= 0 else {
+                if let layer = style.layer(withIdentifier: "iran-user-accuracy-fill") {
+                    style.removeLayer(layer)
+                }
+                if let source = style.source(withIdentifier: "iran-user-accuracy-source") {
+                    style.removeSource(source)
+                }
+                lastAccuracyCenter = nil
+                lastAccuracyMeters = nil
+                return
+            }
+
+            let clampedAccuracy = min(max(accuracy, 5), 1_500)
+            if !force,
+               lastAccuracyCenter == center,
+               let lastAccuracyMeters,
+               abs(lastAccuracyMeters - clampedAccuracy) < 2 {
+                return
+            }
+
+            var coordinates = accuracyRing(
+                latitude: center.latitude,
+                longitude: center.longitude,
+                radiusMeters: clampedAccuracy
+            )
+            let polygon = MLNPolygonFeature(
+                coordinates: &coordinates,
+                count: UInt(coordinates.count)
+            )
+
+            if let source = style.source(withIdentifier: "iran-user-accuracy-source") as? MLNShapeSource {
+                source.shape = polygon
+            } else {
+                let source = MLNShapeSource(
+                    identifier: "iran-user-accuracy-source",
+                    shape: polygon,
+                    options: nil
+                )
+                style.addSource(source)
+
+                let fill = MLNFillStyleLayer(
+                    identifier: "iran-user-accuracy-fill",
+                    source: source
+                )
+                fill.fillColor = NSExpression(
+                    forConstantValue: UIColor(red: 0.08, green: 0.53, blue: 0.98, alpha: 1)
+                )
+                fill.fillOpacity = NSExpression(forConstantValue: 0.13)
+                fill.fillOutlineColor = NSExpression(
+                    forConstantValue: UIColor(red: 0.25, green: 0.67, blue: 1, alpha: 0.65)
+                )
+
+                if let routeLayer = style.layer(withIdentifier: "iran-route-casing") {
+                    style.insertLayer(fill, below: routeLayer)
+                } else {
+                    style.addLayer(fill)
+                }
+            }
+
+            lastAccuracyCenter = center
+            lastAccuracyMeters = clampedAccuracy
+        }
+
+        private func accuracyRing(
+            latitude: Double,
+            longitude: Double,
+            radiusMeters: CLLocationAccuracy
+        ) -> [CLLocationCoordinate2D] {
+            let earthRadius = 6_378_137.0
+            let angularDistance = radiusMeters / earthRadius
+            let latitudeRadians = latitude * .pi / 180
+            let longitudeRadians = longitude * .pi / 180
+            var coordinates: [CLLocationCoordinate2D] = []
+
+            for index in 0...48 {
+                let bearing = 2 * .pi * Double(index) / 48
+                let targetLatitude = asin(
+                    sin(latitudeRadians) * cos(angularDistance)
+                    + cos(latitudeRadians) * sin(angularDistance) * cos(bearing)
+                )
+                let targetLongitude = longitudeRadians + atan2(
+                    sin(bearing) * sin(angularDistance) * cos(latitudeRadians),
+                    cos(angularDistance) - sin(latitudeRadians) * sin(targetLatitude)
+                )
+                coordinates.append(
+                    CLLocationCoordinate2D(
+                        latitude: targetLatitude * 180 / .pi,
+                        longitude: targetLongitude * 180 / .pi
+                    )
+                )
+            }
+            return coordinates
         }
 
         private func renderRoute(on mapView: MLNMapView, force: Bool) {
