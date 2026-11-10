@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1524">
+  <meta name="description" content="Iran Navigator - نقشه سه‌بعدی و مسیریابی آزمایشی ایران">
+  <title>Iran Navigator | نقشه و مسیریاب</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1524;
+      --panel: rgba(13, 27, 45, .94);
+      --panel-2: rgba(22, 42, 63, .96);
+      --line: rgba(174, 205, 226, .15);
+      --text: #f4f8fc;
+      --muted: #9eb2c7;
+      --accent: #28d0c4;
+      --accent-2: #0c9fa4;
+      --success: #20bf86;
+      --danger: #ef6268;
+      --shadow: 0 18px 55px rgba(0,0,0,.30);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font-family: Tahoma, "Segoe UI", sans-serif; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    #map { position: fixed; inset: 0; background: #14283c; }
+    .maplibregl-ctrl-attrib { font-family: Tahoma, sans-serif; direction: ltr; }
+    .maplibregl-ctrl-group { border-radius: 12px !important; overflow: hidden; box-shadow: var(--shadow) !important; }
+    .topbar {
+      position: fixed; z-index: 20; top: 16px; left: 18px; right: 18px; height: 68px;
+      display: flex; align-items: center; gap: 14px; padding: 9px 13px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
+      box-shadow: var(--shadow); backdrop-filter: blur(18px);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 218px; }
+    .brand-mark {
+      width: 43px; height: 43px; border-radius: 14px; display: grid; place-items: center;
+      color: #061b25; background: linear-gradient(145deg, #5df0d8, #13a8bd);
+      box-shadow: 0 7px 22px rgba(40,208,196,.25);
+    }
+    .brand-mark svg { width: 25px; height: 25px; }
+    .brand-name { font-size: 15px; font-weight: 900; letter-spacing: .7px; }
+    .brand-sub { color: var(--muted); font-size: 10px; margin-top: 4px; }
+    .search-wrap { flex: 1; max-width: 590px; position: relative; margin: 0 auto; }
+    .searchbox {
+      display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px;
+      background: rgba(255,255,255,.055); border: 1px solid var(--line); border-radius: 14px;
+    }
+    .searchbox svg { width: 19px; height: 19px; color: var(--accent); flex: none; }
+    .searchbox input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text); background: transparent; font-size: 13px; }
+    .searchbox input::placeholder { color: #91a7bc; }
+    .search-submit { border: 0; border-radius: 10px; padding: 9px 15px; background: var(--accent); color: #06212a; font-weight: 900; font-size: 12px; white-space: nowrap; }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .icon-btn, .small-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      height: 40px; min-width: 40px; padding: 0 11px; color: var(--text);
+      background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 12px;
+      transition: .18s ease;
+    }
+    .icon-btn:hover, .small-btn:hover { background: rgba(40,208,196,.13); border-color: rgba(40,208,196,.4); transform: translateY(-1px); }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .top-status { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 5px rgba(32,191,134,.12); }
+    .route-panel {
+      position: fixed; z-index: 15; top: 101px; right: 18px; bottom: 18px; width: 370px;
+      display: flex; flex-direction: column; overflow: hidden;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 22px;
+      box-shadow: var(--shadow); backdrop-filter: blur(18px);
+    }
+    .panel-head { padding: 18px 18px 13px; border-bottom: 1px solid var(--line); }
+    .eyebrow { color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: 1.1px; }
+    .panel-title { font-size: 18px; font-weight: 900; margin-top: 6px; }
+    .panel-desc { color: var(--muted); font-size: 11px; line-height: 1.8; margin-top: 6px; }
+    .panel-body { overflow-y: auto; padding: 14px; scrollbar-width: thin; scrollbar-color: #34516a transparent; }
+    .section-label { color: var(--muted); font-size: 11px; font-weight: 700; margin: 2px 2px 9px; }
+    .mode-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 16px; }
+    .mode-btn {
+      border: 1px solid var(--line); background: rgba(255,255,255,.045); color: var(--muted);
+      border-radius: 12px; padding: 10px 5px; font-size: 11px; font-weight: 800; transition: .18s;
+    }
+    .mode-btn .mode-icon { display: block; font-size: 18px; margin-bottom: 5px; }
+    .mode-btn.active { color: #06232b; background: linear-gradient(135deg, #55e4d3, #16b6b7); border-color: transparent; box-shadow: 0 7px 20px rgba(40,208,196,.18); }
+    .route-inputs { display: grid; gap: 9px; margin-bottom: 12px; }
+    .route-input-row { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.04); }
+    .route-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 4px rgba(32,191,134,.12); }
+    .route-dot.dest { background: var(--danger); box-shadow: 0 0 0 4px rgba(239,98,104,.12); }
+    .route-input-row input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text); background: transparent; font-size: 12px; }
+    .route-input-row input::placeholder { color: #8da4ba; }
+    .pick-btn { border: 0; background: transparent; color: var(--accent); font-size: 10px; font-weight: 800; white-space: nowrap; }
+    .route-tools { display: flex; gap: 7px; margin-bottom: 16px; }
+    .tool-btn { flex: 1; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.045); color: var(--muted); padding: 9px 6px; font-size: 10px; font-weight: 700; }
+    .tool-btn.active { border-color: rgba(40,208,196,.5); color: var(--accent); background: rgba(40,208,196,.09); }
+    .primary-btn {
+      width: 100%; height: 47px; border: 0; border-radius: 13px; color: #05222a;
+      background: linear-gradient(115deg, #62edda, #18b9bd); font-size: 13px; font-weight: 900;
+      box-shadow: 0 9px 25px rgba(40,208,196,.18); transition: .2s;
+    }
+    .primary-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+    .primary-btn:disabled { opacity: .5; cursor: wait; transform: none; }
+    .secondary-btn { width: 100%; height: 42px; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); background: rgba(255,255,255,.055); font-size: 11px; font-weight: 800; }
+    .summary { display: none; grid-template-columns: repeat(3,1fr); gap: 7px; margin-top: 14px; }
+    .summary.visible { display: grid; }
+    .metric { background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 12px; padding: 10px 7px; text-align: center; }
+    .metric strong { display: block; color: var(--text); font-size: 14px; }
+    .metric span { display: block; color: var(--muted); font-size: 9px; margin-top: 5px; }
+    .status-line { min-height: 30px; color: var(--muted); font-size: 10px; line-height: 1.8; padding: 9px 2px 3px; }
+    .status-line.error { color: #ff9296; }
+    .status-line.good { color: #68e0b1; }
+    .guidance {
+      display: none; padding: 13px; margin-top: 9px; border-radius: 15px;
+      background: linear-gradient(135deg, rgba(18,157,160,.18), rgba(40,208,196,.07));
+      border: 1px solid rgba(40,208,196,.25);
+    }
+    .guidance.visible { display: block; }
+    .guidance-kicker { color: var(--accent); font-size: 9px; font-weight: 900; }
+    .guidance-main { font-size: 14px; font-weight: 900; line-height: 1.9; margin-top: 5px; }
+    .guidance-next { color: var(--muted); font-size: 10px; margin-top: 5px; line-height: 1.7; }
+    .guidance-distance { color: var(--accent); font-size: 11px; font-weight: 900; margin-top: 7px; }
+    .maneuvers { margin-top: 15px; display: none; }
+    .maneuvers.visible { display: block; }
+    .maneuver-list { display: grid; gap: 7px; }
+    .maneuver { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 12px; background: rgba(255,255,255,.035); border: 1px solid transparent; }
+    .maneuver.current { border-color: rgba(40,208,196,.38); background: rgba(40,208,196,.08); }
+    .maneuver-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: none; border-radius: 10px; background: rgba(40,208,196,.12); color: var(--accent); font-size: 16px; }
+    .maneuver-text { flex: 1; min-width: 0; }
+    .maneuver-text strong { display: block; font-size: 11px; line-height: 1.8; }
+    .maneuver-text span { color: var(--muted); font-size: 9px; display: block; margin-top: 3px; }
+    .maneuver-length { color: var(--muted); font-size: 9px; white-space: nowrap; padding-top: 4px; }
+    .panel-foot { padding: 10px 15px 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; line-height: 1.8; }
+    .map-tools { position: fixed; z-index: 12; left: 20px; top: 105px; display: grid; gap: 9px; }
+    .map-tool {
+      width: 45px; height: 45px; display: grid; place-items: center; border: 1px solid var(--line);
+      border-radius: 14px; color: var(--text); background: var(--panel); box-shadow: var(--shadow);
+      backdrop-filter: blur(15px); font-size: 17px; transition: .18s;
+    }
+    .map-tool:hover { color: var(--accent); border-color: rgba(40,208,196,.45); transform: translateY(-2px); }
+    .map-tool svg { width: 19px; height: 19px; }
+    .map-hint {
+      position: fixed; z-index: 10; bottom: 22px; left: 20px; padding: 9px 13px;
+      border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+      color: var(--muted); font-size: 10px; box-shadow: var(--shadow); backdrop-filter: blur(12px);
+    }
+    .results {
+      display: none; position: absolute; top: calc(100% + 8px); right: 0; left: 0; z-index: 40;
+      max-height: 330px; overflow: auto; border: 1px solid var(--line); border-radius: 15px;
+      background: #102238; box-shadow: var(--shadow);
+    }
+    .results.open { display: block; }
+    .result-item { width: 100%; display: flex; gap: 10px; text-align: right; padding: 12px; border: 0; border-bottom: 1px solid rgba(255,255,255,.06); color: var(--text); background: transparent; }
+    .result-item:hover { background: rgba(40,208,196,.09); }
+    .result-item:last-child { border-bottom: 0; }
+    .result-icon { color: var(--accent); font-size: 17px; }
+    .result-item strong { display: block; font-size: 11px; }
+    .result-item small { display: block; color: var(--muted); font-size: 9px; margin-top: 4px; }
+    .toast {
+      position: fixed; z-index: 60; bottom: 28px; left: 50%; transform: translate(-50%, 20px);
+      opacity: 0; pointer-events: none; padding: 11px 16px; border-radius: 12px;
+      background: #142b40; border: 1px solid rgba(40,208,196,.3); color: var(--text);
+      font-size: 11px; box-shadow: var(--shadow); transition: .25s; max-width: min(90vw, 480px); text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .loading-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 5px; animation: blink 1s infinite alternate; }
+    @keyframes blink { to { opacity: .25; } }
+    body.light {
+      color-scheme: light;
+      --panel: rgba(250,253,255,.95); --panel-2: rgba(235,244,250,.97);
+      --line: rgba(34,65,89,.14); --text: #173047; --muted: #627b91;
+      --shadow: 0 16px 48px rgba(25,57,81,.17);
+    }
+    body.light .searchbox { background: rgba(19,54,79,.045); }
+    body.light .searchbox input { color: var(--text); }
+    body.light .route-input-row { background: rgba(18,55,80,.035); }
+    body.light .route-input-row input { color: var(--text); }
+    body.light .mode-btn { background: rgba(18,55,80,.04); }
+    body.light .mode-btn.active { color: #06232b; }
+    body.light .tool-btn { background: rgba(18,55,80,.04); }
+    body.light .metric, body.light .maneuver { background: rgba(18,55,80,.035); }
+    body.light .guidance { background: rgba(20,160,160,.08); }
+    body.light .results { background: #f8fcff; }
+    body.light .result-item { color: #173047; border-bottom-color: rgba(34,65,89,.09); }
+    body.light .result-item:hover { background: rgba(20,160,160,.08); }
+    body.light .map-hint { background: rgba(250,253,255,.94); }
+    body.light .map-tool { color: #173047; }
+    body.light .icon-btn, body.light .small-btn { color: #173047; background: rgba(19,54,79,.04); }
+    body.light .route-input-row { border-color: rgba(34,65,89,.15); }
+    @media (max-width: 900px) {
+      .topbar { left: 10px; right: 10px; top: 9px; height: 58px; padding: 7px 9px; gap: 8px; border-radius: 16px; }
+      .brand { min-width: 0; gap: 7px; }
+      .brand-mark { width: 38px; height: 38px; border-radius: 12px; }
+      .brand-name { font-size: 11px; }
+      .brand-sub { display: none; }
+      .top-status { display: none; }
+      .searchbox { height: 40px; padding: 0 9px; gap: 6px; }
+      .searchbox input { font-size: 11px; }
+      .search-submit { padding: 8px 10px; font-size: 10px; }
+      .top-actions { gap: 5px; }
+      .top-actions .icon-btn { min-width: 36px; width: 36px; height: 36px; padding: 0; }
+      .route-panel { top: auto; right: 9px; left: 9px; bottom: 8px; width: auto; max-height: 48vh; border-radius: 19px; }
+      .panel-head { padding: 12px 14px 8px; }
+      .panel-title { font-size: 14px; margin-top: 3px; }
+      .panel-desc { display: none; }
+      .panel-body { padding: 10px; }
+      .map-tools { top: 78px; left: 10px; gap: 7px; }
+      .map-tool { width: 39px; height: 39px; border-radius: 12px; }
+      .map-hint { display: none; }
+      .panel-foot { display: none; }
+      .mode-row { margin-bottom: 10px; }
+      .mode-btn { padding: 7px 4px; }
+      .route-tools { margin-bottom: 10px; }
+      .summary { margin-top: 10px; }
+      .maneuvers { margin-top: 10px; }
+    }
+    @media (max-width: 480px) {
+      .brand-name { display: none; }
+      .brand { width: 38px; }
+      .search-wrap { max-width: none; }
+      .topbar { gap: 6px; }
+      .top-actions .theme-label { display: none; }
+      .route-panel { max-height: 52vh; }
+      .panel-head { display: none; }
+      .panel-body { padding: 9px; }
+      .route-input-row { padding: 7px 9px; }
+      .route-input-row input { font-size: 11px; }
+      .primary-btn { height: 42px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map" aria-label="نقشه تعاملی ایران"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z" stroke="currentColor" stroke-width="2"/><path d="m8.5 10 2.1 2.1 4.9-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div><div class="brand-name">IRAN NAVIGATOR</div><div class="brand-sub">نقشه سه‌بعدی و مسیریاب آزمایشی</div></div>
+    </div>
+
+    <div class="search-wrap">
+      <div class="searchbox">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" stroke-width="2"/><path d="m16 16 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="globalSearch" type="search" placeholder="جست‌وجوی شهر، خیابان یا مکان..." autocomplete="off">
+        <button id="searchButton" class="search-submit">جست‌وجو</button>
+      </div>
+      <div id="searchResults" class="results"></div>
+    </div>
+
+    <div class="top-actions">
+      <div class="top-status"><span class="pulse"></span><span id="connectionStatus">نقشه آماده است</span></div>
+      <button class="icon-btn" id="themeTop" title="تغییر پوسته" aria-label="تغییر پوسته">☼</button>
+    </div>
+  </header>
+
+  <aside class="map-tools">
+    <button class="map-tool" id="locateButton" title="موقعیت من" aria-label="موقعیت من">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+    <button class="map-tool" id="threeDButton" title="تغییر حالت سه‌بعدی" aria-label="تغییر حالت سه‌بعدی">3D</button>
+    <button class="map-tool" id="compassButton" title="بازگشت به شمال" aria-label="بازگشت به شمال">N</button>
+    <button class="map-tool" id="fullscreenButton" title="تمام صفحه" aria-label="تمام صفحه">⛶</button>
+  </aside>
+
+  <aside class="route-panel">
+    <div class="panel-head">
+      <div class="eyebrow">EXPLORE IRAN</div>
+      <div class="panel-title">مسیریابی هوشمند</div>
+      <div class="panel-desc">مبدأ و مقصد را جست‌وجو کنید یا مستقیماً روی نقشه انتخاب کنید. مسیرها بر اساس داده‌های OpenStreetMap محاسبه می‌شوند.</div>
+    </div>
+
+    <div class="panel-body">
+      <div class="section-label">حالت سفر</div>
+      <div class="mode-row">
+        <button class="mode-btn active" data-mode="car"><span class="mode-icon">🚘</span>خودرو</button>
+        <button class="mode-btn" data-mode="motorcycle"><span class="mode-icon">🏍️</span>موتور</button>
+        <button class="mode-btn" data-mode="walking"><span class="mode-icon">🚶</span>پیاده</button>
+      </div>
+
+      <div class="section-label">انتخاب مسیر</div>
+      <div class="route-inputs">
+        <div class="route-input-row">
+          <span class="route-dot"></span>
+          <input id="originInput" type="text" placeholder="مبدأ را انتخاب کنید" autocomplete="off">
+          <button class="pick-btn" id="pickOrigin">روی نقشه</button>
+        </div>
+        <div class="route-input-row">
+          <span class="route-dot dest"></span>
+          <input id="destinationInput" type="text" placeholder="مقصد را انتخاب کنید" autocomplete="off">
+          <button class="pick-btn" id="pickDestination">روی نقشه</button>
+        </div>
+      </div>
+
+      <div class="route-tools">
+        <button class="tool-btn" id="useMyLocation">◎ مبدأ = موقعیت من</button>
+        <button class="tool-btn" id="swapRoute">⇅ جابه‌جایی</button>
+        <button class="tool-btn" id="clearRoute">پاک‌کردن</button>
+      </div>
+
+      <button class="primary-btn" id="calculateButton">محاسبه مسیر جاده‌ای</button>
+      <button class="secondary-btn" id="startButton" disabled>شروع مسیریابی زنده</button>
+
+      <div id="routeSummary" class="summary">
+        <div class="metric"><strong id="distanceMetric">—</strong><span>مسافت</span></div>
+        <div class="metric"><strong id="durationMetric">—</strong><span>زمان تقریبی</span></div>
+        <div class="metric"><strong id="arrivalMetric">—</strong><span>زمان رسیدن</span></div>
+      </div>
+
+      <div id="statusLine" class="status-line">برای شروع، مبدأ و مقصد را مشخص کنید.</div>
+
+      <div id="guidance" class="guidance">
+        <div class="guidance-kicker">راهنمای مسیر بعدی</div>
+        <div id="guidanceMain" class="guidance-main">—</div>
+        <div id="guidanceNext" class="guidance-next">—</div>
+        <div id="guidanceDistance" class="guidance-distance">—</div>
+      </div>
+
+      <div id="maneuvers" class="maneuvers">
+        <div class="section-label">جزئیات مسیر</div>
+        <div id="maneuverList" class="maneuver-list"></div>
+      </div>
+    </div>
+
+    <div class="panel-foot">
+      نسخه پیش‌نمایش وب · داده نقشه از OpenStreetMap · موتور مسیریابی آزمایشی Valhalla
+      <br>مسیر و زمان تخمینی ممکن است با شرایط واقعی خیابان تفاوت داشته باشد.
+    </div>
+  </aside>
+
+  <div class="map-hint">برای انتخاب مبدأ یا مقصد، حالت انتخاب را فعال کنید و روی نقشه بزنید.</div>
+  <div id="toast" class="toast"></div>
+
+  <script src="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      const STYLE_DARK = "https://tiles.openfreemap.org/styles/dark";
+      const STYLE_LIGHT = "https://tiles.openfreemap.org/styles/positron";
+      const VALHALLA_URL = "https://valhalla1.openstreetmap.de/route";
+      const PHOTON_URL = "https://photon.komoot.io/api/";
+      const TEHRAN = [51.4050, 35.7006];
+
+      const $ = function (id) { return document.getElementById(id); };
+      const state = {
+        mode: "car",
+        theme: "dark",
+        is3D: true,
+        selection: null,
+        origin: null,
+        destination: null,
+        route: null,
+        userPosition: null,
+        userAccuracy: null,
+        watchId: null,
+        navigating: false,
+        currentManeuver: 0,
+        lastSpoken: -1,
+        offRouteCount: 0,
+        lastReroute: 0,
+        lastCameraAt: 0,
+        lastCameraPoint: null,
+        smoothBearing: null,
+        routeRequest: 0,
+        voiceAvailable: false,
+        markers: { origin: null, destination: null, user: null },
+        searchResults: []
+      };
+
+      let map;
+      let routeSourceReady = false;
+      let userSourceReady = false;
+      let accuracySourceReady = false;
+      let toastTimer = null;
+
+      const modeLabels = { car: "خودرو", motorcycle: "موتورسیکلت", walking: "پیاده‌روی" };
+
+      function toFa(value) {
+        return String(value).replace(/[0-9]/g, function (d) { return "۰۱۲۳۴۵۶۷۸۹"[Number(d)]; }).replace(/\./g, "٫");
+      }
+
+      function formatDistance(meters) {
+        if (!Number.isFinite(meters)) return "—";
+        if (meters >= 1000) return toFa((meters / 1000).toFixed(meters < 10000 ? 1 : 0)) + " کیلومتر";
+        return toFa(Math.round(meters)) + " متر";
+      }
+
+      function formatDuration(seconds) {
+        const minutes = Math.max(1, Math.round(seconds / 60));
+        if (minutes >= 60) return toFa(Math.floor(minutes / 60)) + " ساعت و " + toFa(minutes % 60) + " دقیقه";
+        return toFa(minutes) + " دقیقه";
+      }
+
+      function setStatus(message, kind) {
+        const el = $("statusLine");
+        el.textContent = message;
+        el.className = "status-line" + (kind ? " " + kind : "");
+      }
+
+      function toast(message) {
+        const el = $("toast");
+        el.textContent = message;
+        el.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { el.classList.remove("show"); }, 2800);
+      }
+
+      function setBusy(busy) {
+        $("calculateButton").disabled = busy;
+        $("calculateButton").innerHTML = busy ? '<span class="loading-dot"></span>در حال محاسبه مسیر...' : "محاسبه مسیر جاده‌ای";
+      }
+
+      function initMap() {
+        if (!window.maplibregl) {
+          setStatus("کتابخانه نقشه بارگذاری نشد. اتصال اینترنت یا CDN را بررسی کنید.", "error");
+          return;
+        }
+        map = new maplibregl.Map({
+          container: "map",
+          style: STYLE_DARK,
+          center: TEHRAN,
+          zoom: 13.2,
+          pitch: 48,
+          bearing: -12,
+          antialias: true,
+          attributionControl: true,
+          maxPitch: 75
+        });
+        map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-left");
+        map.on("load", function () {
+          setupMapLayers();
+          $("connectionStatus").textContent = "نقشه آماده است";
+          setStatus("نقشه آماده است؛ مبدأ و مقصد را انتخاب کنید.", "good");
+        });
+        map.on("error", function (event) {
+          if (event && event.error) console.warn("MapLibre:", event.error.message);
+        });
+        map.on("click", function (event) {
+          if (!state.selection) return;
+          const point = { lon: event.lngLat.lng, lat: event.lngLat.lat, label: "نقطه انتخاب‌شده روی نقشه" };
+          assignPoint(state.selection, point);
+          state.selection = null;
+          updatePickButtons();
+        });
+      }
+
+      function setupMapLayers() {
+        routeSourceReady = false;
+        userSourceReady = false;
+        accuracySourceReady = false;
+
+        if (!map.getSource("openfreemap")) {
+          map.addSource("openfreemap", { type: "vector", url: "https://tiles.openfreemap.org/planet" });
+        }
+
+        if (state.is3D && !map.getLayer("iran-buildings-3d")) {
+          const layers = map.getStyle().layers || [];
+          let beforeId;
+          for (let i = 0; i < layers.length; i++) {
+            if (layers[i].type === "symbol" && layers[i].layout && layers[i].layout["text-field"]) {
+              beforeId = layers[i].id;
+              break;
+            }
+          }
+          map.addLayer({
+            id: "iran-buildings-3d",
+            source: "openfreemap",
+            "source-layer": "building",
+            type: "fill-extrusion",
+            minzoom: 14.5,
+            filter: ["!=", ["get", "hide_3d"], true],
+            paint: {
+              "fill-extrusion-color": state.theme === "dark" ? "#71879c" : "#b5c6d6",
+              "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["coalesce", ["get", "render_height"], ["get", "height"], 8]],
+              "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0],
+              "fill-extrusion-opacity": 0.88
+            }
+          }, beforeId);
+        }
+
+        map.addSource("route-source", { type: "geojson", data: emptyFeatureCollection() });
+        map.addLayer({
+          id: "route-casing", type: "line", source: "route-source",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": state.theme === "dark" ? "#071b2d" : "#ffffff", "line-width": 10, "line-opacity": .92 }
+        });
+        map.addLayer({
+          id: "route-line", type: "line", source: "route-source",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": "#17c9c2", "line-width": 5.5, "line-opacity": 1 }
+        });
+        routeSourceReady = true;
+        if (state.route) drawRoute();
+
+        map.addSource("accuracy-source", { type: "geojson", data: emptyFeatureCollection() });
+        map.addLayer({
+          id: "accuracy-fill", type: "fill", source: "accuracy-source",
+          paint: { "fill-color": "#168bff", "fill-opacity": .13 }
+        });
+        accuracySourceReady = true;
+
+        map.addSource("user-source", { type: "geojson", data: emptyFeatureCollection() });
+        map.addLayer({
+          id: "user-halo", type: "circle", source: "user-source",
+          paint: { "circle-radius": 13, "circle-color": "#168bff", "circle-opacity": .18 }
+        });
+        map.addLayer({
+          id: "user-dot", type: "circle", source: "user-source",
+          paint: { "circle-radius": 7, "circle-color": "#168bff", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2.5 }
+        });
+        userSourceReady = true;
+        updateUserLayers();
+      }
+
+      function emptyFeatureCollection() {
+        return { type: "FeatureCollection", features: [] };
+      }
+
+      function setTheme(theme) {
+        state.theme = theme;
+        document.body.classList.toggle("light", theme === "light");
+        $("themeTop").textContent = theme === "dark" ? "☼" : "☾";
+        if (!map) return;
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        const pitch = map.getPitch();
+        const bearing = map.getBearing();
+        map.setStyle(theme === "dark" ? STYLE_DARK : STYLE_LIGHT);
+        map.once("style.load", function () {
+          setupMapLayers();
+          map.jumpTo({ center: center, zoom: zoom, pitch: pitch, bearing: bearing });
+          renderPointMarkers();
+        });
+      }
+
+      function toggle3D() {
+        state.is3D = !state.is3D;
+        $("threeDButton").textContent = state.is3D ? "3D" : "2D";
+        if (!map) return;
+        if (state.is3D && !map.getLayer("iran-buildings-3d")) {
+          setupMapLayers();
+        } else if (!state.is3D && map.getLayer("iran-buildings-3d")) {
+          map.removeLayer("iran-buildings-3d");
+        }
+        map.easeTo({ pitch: state.is3D ? 55 : 0, duration: 650 });
+      }
+
+      function markerElement(kind) {
+        const el = document.createElement("div");
+        el.className = "custom-marker " + kind;
+        el.style.width = kind === "user" ? "19px" : "23px";
+        el.style.height = kind === "user" ? "19px" : "23px";
+        el.style.borderRadius = "50%";
+        el.style.border = "3px solid white";
+        el.style.boxShadow = "0 4px 14px rgba(0,0,0,.4)";
+        el.style.background = kind === "origin" ? "#20bf86" : kind === "destination" ? "#ef6268" : "#168bff";
+        if (kind === "user") el.style.boxShadow = "0 0 0 7px rgba(22,139,255,.18), 0 3px 12px rgba(0,0,0,.4)";
+        return el;
+      }
+
+      function updateMarker(kind, point) {
+        if (!map || !point) return;
+        if (state.markers[kind]) state.markers[kind].remove();
+        state.markers[kind] = new maplibregl.Marker({ element: markerElement(kind), anchor: "center" })
+          .setLngLat([point.lon, point.lat]).addTo(map);
+      }
+
+      function renderPointMarkers() {
+        if (state.origin) updateMarker("origin", state.origin);
+        else if (state.markers.origin) { state.markers.origin.remove(); state.markers.origin = null; }
+        if (state.destination) updateMarker("destination", state.destination);
+        else if (state.markers.destination) { state.markers.destination.remove(); state.markers.destination = null; }
+      }
+
+      function assignPoint(kind, point) {
+        if (kind === "origin") {
+          state.origin = point;
+          $("originInput").value = point.label || coordsLabel(point);
+          state.selection = "destination";
+          setStatus("مبدأ ثبت شد؛ حالا مقصد را انتخاب کنید.", "good");
+        } else {
+          state.destination = point;
+          $("destinationInput").value = point.label || coordsLabel(point);
+          setStatus("مقصد ثبت شد؛ مسیر جاده‌ای را محاسبه کنید.", "good");
+        }
+        state.route = null;
+        $("startButton").disabled = true;
+        $("routeSummary").classList.remove("visible");
+        $("guidance").classList.remove("visible");
+        $("maneuvers").classList.remove("visible");
+        renderPointMarkers();
+        clearRouteLayer();
+        updatePickButtons();
+      }
+
+      function coordsLabel(point) {
+        return toFa(point.lat.toFixed(5)) + "، " + toFa(point.lon.toFixed(5));
+      }
+
+      function updatePickButtons() {
+        $("pickOrigin").classList.toggle("active", state.selection === "origin");
+        $("pickDestination").classList.toggle("active", state.selection === "destination");
+        if (state.selection) {
+          map.getCanvas().style.cursor = "crosshair";
+          toast(state.selection === "origin" ? "روی نقشه محل مبدأ را انتخاب کنید." : "روی نقشه محل مقصد را انتخاب کنید.");
+        } else if (map) {
+          map.getCanvas().style.cursor = "";
+        }
+      }
+
+      function clearRouteLayer() {
+        if (map && routeSourceReady && map.getSource("route-source")) {
+          map.getSource("route-source").setData(emptyFeatureCollection());
+        }
+      }
+
+      function drawRoute() {
+        if (!map || !routeSourceReady || !state.route) return;
+        const feature = {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: state.route.points.map(function (p) { return [p.lon, p.lat]; })
+          }
+        };
+        map.getSource("route-source").setData(feature);
+      }
+
+      function updateUserLayers() {
+        if (!map || !state.userPosition || !userSourceReady) return;
+        const p = state.userPosition;
+        map.getSource("user-source").setData({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+          properties: {}
+        });
+        if (state.userAccuracy && accuracySourceReady) {
+          map.getSource("accuracy-source").setData({
+            type: "Feature",
+            geometry: { type: "Polygon", coordinates: [makeAccuracyRing(p.lat, p.lon, state.userAccuracy)] },
+            properties: {}
+          });
+        }
+      }
+
+      function makeAccuracyRing(lat, lon, radius) {
+        const points = [];
+        const earth = 6378137;
+        const lat1 = lat * Math.PI / 180;
+        const lon1 = lon * Math.PI / 180;
+        const angular = Math.min(radius, 1200) / earth;
+        for (let i = 0; i <= 36; i++) {
+          const bearing = 2 * Math.PI * i / 36;
+          const lat2 = Math.asin(Math.sin(lat1) * Math.cos(angular) + Math.cos(lat1) * Math.sin(angular) * Math.cos(bearing));
+          const lon2 = lon1 + Math.atan2(Math.sin(bearing) * Math.sin(angular) * Math.cos(lat1), Math.cos(angular) - Math.sin(lat1) * Math.sin(lat2));
+          points.push([lon2 * 180 / Math.PI, lat2 * 180 / Math.PI]);
+        }
+        return points;
+      }
+
+      function haversine(a, b) {
+        const r = 6371000;
+        const p1 = a.lat * Math.PI / 180;
+        const p2 = b.lat * Math.PI / 180;
+        const dp = (b.lat - a.lat) * Math.PI / 180;
+        const dl = (b.lon - a.lon) * Math.PI / 180;
+        const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+        return 2 * r * Math.asin(Math.sqrt(Math.min(1, h)));
+      }
+
+      function bearingBetween(a, b) {
+        const p1 = a.lat * Math.PI / 180;
+        const p2 = b.lat * Math.PI / 180;
+        const dl = (b.lon - a.lon) * Math.PI / 180;
+        const y = Math.sin(dl) * Math.cos(p2);
+        const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+        return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+      }
+
+      function getPosition(options) {
+        return new Promise(function (resolve, reject) {
+          if (!navigator.geolocation) {
+            reject(new Error("مرورگر شما از GPS پشتیبانی نمی‌کند."));
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(resolve, reject, options || {
+            enableHighAccuracy: true, timeout: 15000, maximumAge: 0
+          });
+        });
+      }
+
+      function handlePosition(position, recenter) {
+        const coords = position.coords;
+        state.userPosition = { lat: coords.latitude, lon: coords.longitude };
+        state.userAccuracy = Number.isFinite(coords.accuracy) ? coords.accuracy : 100;
+        updateUserLayers();
+        if (recenter && map) {
+          map.easeTo({
+            center: [coords.longitude, coords.latitude],
+            zoom: 17,
+            pitch: state.navigating ? 58 : 48,
+            duration: 800
+          });
+        }
+        if (state.navigating) {
+          followCamera(position);
+          updateNavigationProgress(position);
+        }
+      }
+
+      async function locateUser() {
+        setStatus("در حال دریافت موقعیت دقیق از مرورگر...");
+        try {
+          const position = await getPosition({ enableHighAccuracy: true, timeout: 18000, maximumAge: 0 });
+          handlePosition(position, true);
+          setStatus("موقعیت دریافت شد؛ دقت گزارش‌شده " + toFa(Math.round(position.coords.accuracy)) + " متر است.", "good");
+        } catch (error) {
+          setStatus(locationError(error), "error");
+          toast(locationError(error));
+        }
+      }
+
+      function locationError(error) {
+        if (error && error.code === 1) return "اجازه دسترسی به موقعیت مکانی داده نشد.";
+        if (error && error.code === 2) return "موقعیت فعلاً در دسترس نیست؛ GPS و اینترنت را بررسی کنید.";
+        if (error && error.code === 3) return "دریافت موقعیت بیش از حد طول کشید؛ دوباره تلاش کنید.";
+        return error && error.message ? error.message : "خطا در دریافت موقعیت.";
+      }
+
+      function startWatch() {
+        if (!navigator.geolocation) {
+          setStatus("مرورگر از موقعیت مکانی پشتیبانی نمی‌کند.", "error");
+          return;
+        }
+        if (state.watchId !== null) navigator.geolocation.clearWatch(state.watchId);
+        state.watchId = navigator.geolocation.watchPosition(function (position) {
+          if (position.coords.accuracy > 100) {
+            handlePosition(position, false);
+            setStatus("دقت موقعیت پایین است (" + toFa(Math.round(position.coords.accuracy)) + " متر)؛ منتظر GPS بهتر...");
+            return;
+          }
+          handlePosition(position, false);
+        }, function (error) {
+          setStatus(locationError(error), "error");
+        }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 1000 });
+      }
+
+      function stopWatch() {
+        if (state.watchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(state.watchId);
+        state.watchId = null;
+      }
+
+      function setMode(mode) {
+        state.mode = mode;
+        document.querySelectorAll(".mode-btn").forEach(function (button) {
+          button.classList.toggle("active", button.dataset.mode === mode);
+        });
+        state.route = null;
+        $("startButton").disabled = true;
+        $("routeSummary").classList.remove("visible");
+        $("guidance").classList.remove("visible");
+        $("maneuvers").classList.remove("visible");
+        clearRouteLayer();
+        setStatus("حالت سفر به " + modeLabels[mode] + " تغییر کرد؛ مسیر را دوباره محاسبه کنید.");
+      }
+
+      function decodePolyline6(encoded) {
+        const points = [];
+        let index = 0, lat = 0, lon = 0;
+        while (index < encoded.length) {
+          let result = 0, shift = 0, byte;
+          do {
+            if (index >= encoded.length) return points;
+            byte = encoded.charCodeAt(index++) - 63;
+            result |= (byte & 0x1f) << shift;
+            shift += 5;
+          } while (byte >= 0x20);
+          lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+
+          result = 0; shift = 0;
+          do {
+            if (index >= encoded.length) return points;
+            byte = encoded.charCodeAt(index++) - 63;
+            result |= (byte & 0x1f) << shift;
+            shift += 5;
+          } while (byte >= 0x20);
+          lon += (result & 1) ? ~(result >> 1) : (result >> 1);
+          points.push({ lat: lat / 1000000, lon: lon / 1000000 });
+        }
+        return points;
+      }
+
+      function localInstruction(type, street) {
+        const action = {
+          0: "به مسیر ادامه دهید",
+          1: "حرکت را آغاز کنید",
+          2: "به سمت راست حرکت کنید",
+          3: "به سمت چپ حرکت کنید",
+          4: "به مقصد رسیده‌اید",
+          5: "از سمت راست به مقصد می‌رسید",
+          6: "از سمت چپ به مقصد می‌رسید",
+          7: "مسیر به راه دیگری تبدیل می‌شود",
+          8: "مستقیم ادامه دهید",
+          9: "کمی به راست متمایل شوید",
+          10: "به راست بپیچید",
+          11: "با زاویه تند به راست بپیچید",
+          12: "دور بزنید",
+          13: "دور بزنید",
+          14: "با زاویه تند به چپ بپیچید",
+          15: "به چپ بپیچید",
+          16: "کمی به چپ متمایل شوید",
+          17: "از رمپ مستقیم وارد شوید",
+          18: "از رمپ سمت راست وارد شوید",
+          19: "از رمپ سمت چپ وارد شوید",
+          20: "خروجی سمت راست را انتخاب کنید",
+          21: "خروجی سمت چپ را انتخاب کنید",
+          22: "مستقیم ادامه دهید",
+          23: "در سمت راست مسیر بمانید",
+          24: "در سمت چپ مسیر بمانید",
+          25: "به مسیر ادغام شوید",
+          26: "وارد میدان شوید",
+          27: "از میدان خارج شوید",
+          28: "وارد مسیر کشتی شوید",
+          29: "از مسیر کشتی خارج شوید",
+          30: "به مسیر حمل‌ونقل عمومی بروید",
+          31: "خط یا وسیله را عوض کنید",
+          32: "در همین وسیله بمانید",
+          37: "از سمت راست ادغام شوید",
+          38: "از سمت چپ ادغام شوید"
+        }[type] || "به مسیر ادامه دهید";
+        return street && street.toLowerCase() !== "unnamed road" ? action + " و وارد " + street + " شوید" : action;
+      }
+
+      async function fetchRoute(start, end, mode) {
+        const costing = mode === "car" ? "auto" : mode === "walking" ? "pedestrian" : "motorcycle";
+        const body = {
+          locations: [{ lat: start.lat, lon: start.lon }, { lat: end.lat, lon: end.lon }],
+          costing: costing,
+          units: "kilometers",
+          language: "en-US",
+          shape_format: "polyline6",
+          directions_type: "instructions",
+          id: "iran-navigator-web-preview"
+        };
+        let response = await fetch(VALHALLA_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify(body)
+        });
+        let data = await response.json().catch(function () { return {}; });
+        if (!response.ok && mode === "motorcycle") {
+          body.costing = "motor_scooter";
+          response = await fetch(VALHALLA_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify(body)
+          });
+          data = await response.json().catch(function () { return {}; });
+          if (response.ok) data._motorFallback = true;
+        }
+        if (!response.ok) throw new Error(data.error || data.status_message || "سرویس مسیریابی پاسخ مناسبی نداد (" + response.status + ").");
+        const trip = data.trip;
+        if (!trip || !trip.legs || !trip.legs.length) throw new Error("مسیر قابل استفاده‌ای پیدا نشد.");
+        const leg = trip.legs[0];
+        const points = decodePolyline6(leg.shape || "");
+        if (points.length < 2) throw new Error("هندسه مسیر از موتور مسیریابی دریافت نشد.");
+        const maneuvers = (leg.maneuvers || []).map(function (m) {
+          const names = Array.isArray(m.street_names) ? m.street_names.filter(Boolean) : [];
+          const street = names.join("، ");
+          return {
+            type: Number(m.type || 0),
+            instruction: localInstruction(Number(m.type || 0), street),
+            street: street,
+            lengthKm: Number(m.length || 0),
+            timeSeconds: Number(m.time || 0),
+            beginIndex: Number(m.begin_shape_index || 0),
+            endIndex: Number(m.end_shape_index || 0)
+          };
+        });
+        const summary = trip.summary || leg.summary || {};
+        return {
+          points: points,
+          maneuvers: maneuvers,
+          distanceKm: Number(summary.length || 0),
+          durationSeconds: Number(summary.time || 0),
+          motorFallback: Boolean(data._motorFallback)
+        };
+      }
+
+      async function calculateRoute() {
+        if (!state.origin || !state.destination) {
+          setStatus("ابتدا مبدأ و مقصد را انتخاب کنید.", "error");
+          return;
+        }
+        if (haversine(state.origin, state.destination) < 15) {
+          setStatus("مبدأ و مقصد خیلی به هم نزدیک هستند.", "error");
+          return;
+        }
+        const token = ++state.routeRequest;
+        setBusy(true);
+        setStatus("در حال محاسبه مسیر روی شبکه واقعی خیابان‌ها...");
+        try {
+          const route = await fetchRoute(state.origin, state.destination, state.mode);
+          if (token !== state.routeRequest) return;
+          state.route = route;
+          state.currentManeuver = firstGuidanceIndex(route);
+          state.lastSpoken = -1;
+          state.offRouteCount = 0;
+          drawRoute();
+          renderPointMarkers();
+          fitRoute(route);
+          $("distanceMetric").textContent = formatDistance(route.distanceKm * 1000);
+          $("durationMetric").textContent = formatDuration(route.durationSeconds);
+          const arrival = new Date(Date.now() + route.durationSeconds * 1000);
+          $("arrivalMetric").textContent = toFa(arrival.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" }));
+          $("routeSummary").classList.add("visible");
+          $("startButton").disabled = false;
+          renderManeuvers();
+          updateGuidance(null);
+          $("maneuvers").classList.add("visible");
+          setStatus(route.motorFallback ? "پروفایل اختصاصی موتور در سرویس موجود نبود؛ مسیر با پروفایل اسکوتر محاسبه شد." : "مسیر جاده‌ای آماده است. برای دنبال‌کردن زنده، شروع را بزنید.", "good");
+        } catch (error) {
+          setStatus(error.message || "محاسبه مسیر انجام نشد.", "error");
+        } finally {
+          if (token === state.routeRequest) setBusy(false);
+        }
+      }
+
+      function firstGuidanceIndex(route) {
+        const index = route.maneuvers.findIndex(function (m) { return m.type > 3 && m.type !== 4; });
+        return index >= 0 ? index : 0;
+      }
+
+      function fitRoute(route) {
+        const coords = route.points.map(function (p) { return [p.lon, p.lat]; });
+        const bounds = coords.reduce(function (b, p) { return b.extend(p); }, new maplibregl.LngLatBounds(coords[0], coords[0]));
+        const mobile = window.matchMedia("(max-width: 900px)").matches;
+        map.fitBounds(bounds, {
+          padding: mobile ? { top: 110, right: 35, bottom: 340, left: 35 } : { top: 110, right: 430, bottom: 70, left: 90 },
+          maxZoom: 15.5,
+          duration: 800
+        });
+      }
+
+      function iconForManeuver(type) {
+        if ([10,11,18,20,37].includes(type)) return "↱";
+        if ([15,14,19,21,38].includes(type)) return "↰";
+        if ([12,13].includes(type)) return "↶";
+        if ([26,27].includes(type)) return "⟳";
+        if ([17,22,8,1,2,3,7].includes(type)) return "↑";
+        if (type === 4 || type === 5 || type === 6) return "⚑";
+        return "➜";
+      }
+
+      function renderManeuvers() {
+        const list = $("maneuverList");
+        list.innerHTML = "";
+        if (!state.route) return;
+        state.route.maneuvers.forEach(function (m, index) {
+          const row = document.createElement("div");
+          row.className = "maneuver" + (index === state.currentManeuver ? " current" : "");
+          row.innerHTML = '<div class="maneuver-icon"></div><div class="maneuver-text"><strong></strong><span></span></div><div class="maneuver-length"></div>';
+          row.querySelector(".maneuver-icon").textContent = iconForManeuver(m.type);
+          row.querySelector(".maneuver-text strong").textContent = m.instruction;
+          row.querySelector(".maneuver-text span").textContent = m.street || "نام خیابان در داده نقشه ثبت نشده است";
+          row.querySelector(".maneuver-length").textContent = formatDistance(m.lengthKm * 1000);
+          list.appendChild(row);
+        });
+      }
+
+      function updateGuidance(distance) {
+        if (!state.route) return;
+        const m = state.route.maneuvers[state.currentManeuver];
+        const next = state.route.maneuvers[state.currentManeuver + 1];
+        if (!m) {
+          $("guidanceMain").textContent = "به مقصد رسیده‌اید.";
+          $("guidanceNext").textContent = "مسیریابی پایان یافت.";
+          $("guidanceDistance").textContent = "";
+        } else {
+          $("guidanceMain").textContent = m.instruction;
+          $("guidanceNext").textContent = next ? "پس از آن: " + next.instruction : "گام بعدی: رسیدن به مقصد";
+          $("guidanceDistance").textContent = distance === null ? "راهنمای مسیر آماده است." : "تا گردش بعدی: " + formatDistance(distance);
+        }
+        const rows = $("maneuverList").children;
+        for (let i = 0; i < rows.length; i++) rows[i].classList.toggle("current", i === state.currentManeuver);
+      }
+
+      function distanceAlongRoute(startIndex, endIndex) {
+        const pts = state.route.points;
+        let total = 0;
+        const start = Math.max(0, Math.min(startIndex, pts.length - 1));
+        const end = Math.max(start, Math.min(endIndex, pts.length - 1));
+        for (let i = start; i < end; i++) total += haversine(pts[i], pts[i + 1]);
+        return total;
+      }
+
+      function nearestRoutePoint(point) {
+        let nearest = 0;
+        let best = Infinity;
+        const pts = state.route.points;
+        for (let i = 0; i < pts.length; i++) {
+          const d = haversine(point, pts[i]);
+          if (d < best) { best = d; nearest = i; }
+        }
+        return { index: nearest, distance: best };
+      }
+
+      function followCamera(position, force) {
+        const now = Date.now();
+        const point = { lat: position.coords.latitude, lon: position.coords.longitude };
+        const previous = state.lastCameraPoint;
+        const moved = previous ? haversine(previous, point) : Infinity;
+        if (!force && (moved < (position.coords.accuracy < 25 ? 3 : 7) || now - state.lastCameraAt < 1300)) return;
+
+        let targetBearing = map.getBearing();
+        if (Number.isFinite(position.coords.heading) && position.coords.speed > 1.5) targetBearing = position.coords.heading;
+        else if (previous && moved > 5) targetBearing = bearingBetween(previous, point);
+        const current = state.smoothBearing === null ? map.getBearing() : state.smoothBearing;
+        const delta = ((targetBearing - current + 540) % 360) - 180;
+        const bearing = (current + delta * .28 + 360) % 360;
+        state.smoothBearing = bearing;
+
+        map.easeTo({
+          center: [point.lon, point.lat],
+          zoom: 17.2,
+          pitch: 58,
+          bearing: bearing,
+          offset: [0, 75],
+          duration: 800,
+          essential: true
+        });
+        state.lastCameraAt = now;
+        state.lastCameraPoint = point;
+      }
+
+      function updateNavigationProgress(position) {
+        if (!state.route || !state.navigating) return;
+        const current = { lat: position.coords.latitude, lon: position.coords.longitude };
+        const nearest = nearestRoutePoint(current);
+        if (nearest.distance > 80 && position.coords.accuracy <= 35) state.offRouteCount++;
+        else state.offRouteCount = 0;
+
+        const maneuver = state.route.maneuvers[state.currentManeuver];
+        if (maneuver) {
+          const targetIndex = Math.min(state.route.points.length - 1, Math.max(0, maneuver.endIndex));
+          const remaining = distanceAlongRoute(nearest.index, targetIndex);
+          if (nearest.index >= targetIndex - 2 && state.currentManeuver < state.route.maneuvers.length - 1) {
+            state.currentManeuver++;
+            state.lastSpoken = -1;
+            updateGuidance(null);
+            renderManeuvers();
+          } else {
+            updateGuidance(remaining);
+            if (remaining <= 350 && remaining >= 30 && state.lastSpoken !== state.currentManeuver) {
+              speak("تا " + formatDistance(remaining) + " دیگر، " + maneuver.instruction);
+              state.lastSpoken = state.currentManeuver;
+            }
+          }
+        }
+
+        if (haversine(current, state.destination) < 35) {
+          stopNavigation();
+          speak("به مقصد رسیدید.");
+          setStatus("به مقصد رسیدید.", "good");
+          return;
+        }
+
+        if (state.offRouteCount >= 4 && Date.now() - state.lastReroute > 25000) {
+          state.lastReroute = Date.now();
+          rerouteFrom(current);
+        }
+      }
+
+      async function rerouteFrom(current) {
+        if (!state.destination) return;
+        setStatus("از مسیر خارج شده‌اید؛ در حال محاسبه مسیر جدید...");
+        try {
+          const route = await fetchRoute(current, state.destination, state.mode);
+          state.origin = current;
+          $("originInput").value = "موقعیت فعلی";
+          state.route = route;
+          state.currentManeuver = firstGuidanceIndex(route);
+          state.lastSpoken = -1;
+          state.offRouteCount = 0;
+          drawRoute();
+          renderPointMarkers();
+          renderManeuvers();
+          updateGuidance(null);
+          setStatus("مسیر جدید محاسبه شد.", "good");
+          speak("مسیر جدید محاسبه شد.");
+        } catch (error) {
+          setStatus("محاسبه مجدد مسیر ناموفق بود: " + error.message, "error");
+        }
+      }
+
+      function speak(text) {
+        if (!("speechSynthesis" in window)) {
+          setStatus("مرورگر از راهنمای صوتی پشتیبانی نمی‌کند؛ دستورها به‌صورت متنی نمایش داده می‌شوند.");
+          return;
+        }
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "fa-IR";
+        utterance.rate = .95;
+        const voices = window.speechSynthesis.getVoices();
+        const faVoice = voices.find(function (voice) { return voice.lang && voice.lang.toLowerCase().startsWith("fa"); });
+        if (faVoice) utterance.voice = faVoice;
+        window.speechSynthesis.speak(utterance);
+      }
+
+      function startNavigation() {
+        if (!state.route) return;
+        if (!navigator.geolocation) {
+          toast("مرورگر از GPS پشتیبانی نمی‌کند.");
+          return;
+        }
+        state.navigating = true;
+        state.offRouteCount = 0;
+        state.lastSpoken = -1;
+        state.lastCameraAt = 0;
+        state.lastCameraPoint = null;
+        state.smoothBearing = null;
+        $("startButton").textContent = "توقف مسیریابی";
+        $("startButton").classList.add("active");
+        $("startButton").onclick = stopNavigation;
+        setStatus("مسیریابی زنده فعال شد؛ اجازه موقعیت مکانی را تأیید کنید.", "good");
+        startWatch();
+        if (state.userPosition) {
+          map.easeTo({ center: [state.userPosition.lon, state.userPosition.lat], zoom: 17.2, pitch: 58, duration: 700 });
+        }
+        speak("مسیریابی شروع شد. حالت " + modeLabels[state.mode] + ".");
+      }
+
+      function stopNavigation() {
+        state.navigating = false;
+        stopWatch();
+        if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+        $("startButton").textContent = "شروع مسیریابی زنده";
+        $("startButton").classList.remove("active");
+        $("startButton").onclick = startNavigation;
+        if (map) map.easeTo({ pitch: state.is3D ? 48 : 0, duration: 450 });
+        setStatus("مسیریابی متوقف شد.");
+      }
+
+      async function searchPlaces(query, target) {
+        const center = map ? map.getCenter() : { lat: TEHRAN[1], lng: TEHRAN[0] };
+        const params = new URLSearchParams({
+          q: query,
+          limit: "6",
+          lat: String(center.lat),
+          lon: String(center.lng),
+          lang: "fa"
+        });
+        const response = await fetch(PHOTON_URL + "?" + params.toString(), { headers: { "Accept": "application/json" } });
+        if (!response.ok) throw new Error("سرویس جست‌وجوی مکان پاسخ نداد.");
+        const data = await response.json();
+        return (data.features || []).map(function (feature) {
+          const p = feature.properties || {};
+          const coords = feature.geometry && feature.geometry.coordinates;
+          if (!coords || coords.length < 2) return null;
+          const title = p.name || p.street || p.city || "مکان بدون نام";
+          const subtitle = [p.street, p.district, p.city, p.state, p.country].filter(function (x, i, a) { return x && x !== title && a.indexOf(x) === i; }).join("، ");
+          return { title: title, subtitle: subtitle, label: title + (subtitle ? "، " + subtitle : ""), lon: coords[0], lat: coords[1], target: target };
+        }).filter(Boolean);
+      }
+
+      function showSearchResults(results, target) {
+        state.searchResults = results;
+        const container = $("searchResults");
+        container.innerHTML = "";
+        if (!results.length) {
+          container.innerHTML = '<div class="result-item"><span class="result-icon">⌕</span><div><strong>نتیجه‌ای پیدا نشد</strong><small>نام مکان یا شهر دیگری را امتحان کنید.</small></div></div>';
+          container.classList.add("open");
+          return;
+        }
+        results.forEach(function (result) {
+          const button = document.createElement("button");
+          button.className = "result-item";
+          button.innerHTML = '<span class="result-icon">⌖</span><div><strong></strong><small></small></div>';
+          button.querySelector("strong").textContent = result.title;
+          button.querySelector("small").textContent = result.subtitle || "مکان روی نقشه";
+          button.addEventListener("click", function () {
+            container.classList.remove("open");
+            const point = { lat: result.lat, lon: result.lon, label: result.label };
+            if (target === "origin" || target === "destination") {
+              assignPoint(target, point);
+            } else if (state.selection) {
+              assignPoint(state.selection, point);
+            } else {
+              state.selection = "destination";
+              assignPoint("destination", point);
+            }
+            map.flyTo({ center: [point.lon, point.lat], zoom: 16.5, pitch: state.is3D ? 48 : 0, duration: 850 });
+            $("globalSearch").value = result.label;
+          });
+          container.appendChild(button);
+        });
+        container.classList.add("open");
+      }
+
+      async function runSearch(target) {
+        const input = $("globalSearch");
+        const query = input.value.trim();
+        if (!query) return;
+        setStatus("در حال جست‌وجوی مکان...");
+        try {
+          const results = await searchPlaces(query, target || null);
+          showSearchResults(results, target || null);
+          setStatus(results.length ? toFa(results.length) + " نتیجه پیدا شد؛ یکی را انتخاب کنید." : "نتیجه‌ای پیدا نشد.");
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      }
+
+      function useMyLocationAsOrigin() {
+        setStatus("در حال دریافت موقعیت برای مبدأ...");
+        getPosition({ enableHighAccuracy: true, timeout: 18000, maximumAge: 0 }).then(function (position) {
+          handlePosition(position, true);
+          const p = { lat: position.coords.latitude, lon: position.coords.longitude, label: "موقعیت فعلی من" };
+          assignPoint("origin", p);
+          setStatus("موقعیت فعلی به‌عنوان مبدأ ثبت شد.", "good");
+        }).catch(function (error) { setStatus(locationError(error), "error"); });
+      }
+
+      function swapRoute() {
+        const temp = state.origin;
+        state.origin = state.destination;
+        state.destination = temp;
+        const a = $("originInput").value;
+        $("originInput").value = $("destinationInput").value;
+        $("destinationInput").value = a;
+        state.route = null;
+        $("startButton").disabled = true;
+        $("routeSummary").classList.remove("visible");
+        $("guidance").classList.remove("visible");
+        $("maneuvers").classList.remove("visible");
+        clearRouteLayer();
+        renderPointMarkers();
+        setStatus("مبدأ و مقصد جابه‌جا شدند.");
+      }
+
+      function clearAll() {
+        state.routeRequest++;
+        state.origin = null;
+        state.destination = null;
+        state.route = null;
+        state.selection = null;
+        if (state.navigating) stopNavigation();
+        $("originInput").value = "";
+        $("destinationInput").value = "";
+        $("routeSummary").classList.remove("visible");
+        $("guidance").classList.remove("visible");
+        $("maneuvers").classList.remove("visible");
+        $("startButton").disabled = true;
+        clearRouteLayer();
+        renderPointMarkers();
+        updatePickButtons();
+        setStatus("مبدأ و مقصد پاک شدند.");
+      }
+
+      function bindEvents() {
+        document.querySelectorAll(".mode-btn").forEach(function (button) {
+          button.addEventListener("click", function () { setMode(button.dataset.mode); });
+        });
+        $("themeTop").addEventListener("click", function () { setTheme(state.theme === "dark" ? "light" : "dark"); });
+        $("threeDButton").addEventListener("click", toggle3D);
+        $("locateButton").addEventListener("click", locateUser);
+        $("compassButton").addEventListener("click", function () {
+          if (map) map.easeTo({ bearing: 0, duration: 500 });
+        });
+        $("fullscreenButton").addEventListener("click", function () {
+          const target = document.documentElement;
+          if (!document.fullscreenElement && target.requestFullscreen) target.requestFullscreen();
+          else if (document.exitFullscreen) document.exitFullscreen();
+        });
+        $("pickOrigin").addEventListener("click", function () { state.selection = "origin"; updatePickButtons(); });
+        $("pickDestination").addEventListener("click", function () { state.selection = "destination"; updatePickButtons(); });
+        $("useMyLocation").addEventListener("click", useMyLocationAsOrigin);
+        $("swapRoute").addEventListener("click", swapRoute);
+        $("clearRoute").addEventListener("click", clearAll);
+        $("calculateButton").addEventListener("click", calculateRoute);
+        $("startButton").addEventListener("click", startNavigation);
+        $("searchButton").addEventListener("click", function () { runSearch(null); });
+        $("globalSearch").addEventListener("keydown", function (event) {
+          if (event.key === "Enter") runSearch(null);
+          if (event.key === "Escape") $("searchResults").classList.remove("open");
+        });
+        $("globalSearch").addEventListener("focus", function () {
+          if (state.searchResults.length) $("searchResults").classList.add("open");
+        });
+        document.addEventListener("click", function (event) {
+          if (!event.target.closest(".search-wrap")) $("searchResults").classList.remove("open");
+        });
+        $("originInput").addEventListener("keydown", function (event) {
+          if (event.key === "Enter") { $("globalSearch").value = event.target.value; runSearch("origin"); }
+        });
+        $("destinationInput").addEventListener("keydown", function (event) {
+          if (event.key === "Enter") { $("globalSearch").value = event.target.value; runSearch("destination"); }
+        });
+        $("originInput").addEventListener("focus", function () { state.selection = "origin"; updatePickButtons(); });
+        $("destinationInput").addEventListener("focus", function () { state.selection = "destination"; updatePickButtons(); });
+        window.addEventListener("resize", function () { if (map) map.resize(); });
+      }
+
+      bindEvents();
+      initMap();
+    })();
+  </script>
+</body>
+</html>
