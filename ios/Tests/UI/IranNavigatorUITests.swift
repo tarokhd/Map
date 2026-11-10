@@ -13,7 +13,9 @@ final class IranNavigatorUITests: XCTestCase {
             speed: 8,
             timestamp: Date()
         )
-        XCUIDevice.shared.location = XCUILocation(location: simulatedLocation)
+        if #available(iOS 16.4, *) {
+            XCUIDevice.shared.location = XCUILocation(location: simulatedLocation)
+        }
     }
 
     func testMainNavigationInterfaceLaunches() {
