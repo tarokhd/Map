@@ -1261,6 +1261,7 @@
         $("originInput").value = $("destinationInput").value;
         $("destinationInput").value = a;
         state.route = null;
+        state.lastMatchedRouteIndex = 0;
         $("startButton").disabled = true;
         $("routeSummary").classList.remove("visible");
         $("guidance").classList.remove("visible");
@@ -1275,6 +1276,7 @@
         state.origin = null;
         state.destination = null;
         state.route = null;
+        state.lastMatchedRouteIndex = 0;
         state.selection = null;
         if (state.navigating) stopNavigation();
         $("originInput").value = "";
