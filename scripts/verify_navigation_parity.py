@@ -96,8 +96,8 @@ for schema_name in ("RouteRequest", "RouteResponse", "RouteOption", "RouteLeg", 
     if schema_name not in route_schemas:
         errors.append(f"OpenAPI: missing normalized routing schema {schema_name}")
 
-require("Web", "app", 'src="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js"', "original MapLibre GL JS 6.17 UMD script")
-require("Web", "app", 'href="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css"', "original MapLibre 6.17 CSS")
+require("Web", "app", 'src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"', "MapLibre GL JS 5.24 UMD script")
+require("Web", "app", 'href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css"', "MapLibre 5.24 CSS")
 require("Web", "app", "const maplibregl = window.maplibregl", "MapLibre UMD global namespace")
 if 'type="module"' in sources["Web"]["app"] or 'await import("./vendor/maplibre-gl.mjs")' in sources["Web"]["app"]:
     errors.append("Web: unexpected local ES module loader; stable UMD loader should be used")
