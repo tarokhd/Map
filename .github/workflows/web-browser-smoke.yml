@@ -1,0 +1,61 @@
+name: Browser Smoke Test Iran Navigator Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "scripts/web_map_smoke.cjs"
+      - ".github/workflows/web-browser-smoke.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "scripts/web_map_smoke.cjs"
+      - ".github/workflows/web-browser-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Start static web server
+        run: |
+          python3 -m http.server 4173 --directory web > "$RUNNER_TEMP/iran-navigator-web-server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/iran-navigator-web-server.pid"
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/iran-navigator-web-server.log"
+          exit 1
+
+      - name: Test real browser map rendering and 2D/3D controls
+        run: node scripts/web_map_smoke.cjs
+
+      - name: Upload browser screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iran-navigator-web-browser-smoke
+          path: iran-navigator-web-smoke.png
+          if-no-files-found: ignore
+          retention-days: 7
