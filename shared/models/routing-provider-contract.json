@@ -1,0 +1,87 @@
+{
+  "version": "1.0.0",
+  "coordinateConventions": {
+    "routeApi": "latitude,longitude",
+    "geoJSON": "longitude,latitude",
+    "distance": "meters",
+    "duration": "seconds"
+  },
+  "providers": {
+    "valhalla": {
+      "role": "baseline",
+      "trafficAware": false,
+      "supportedModes": ["car", "motorcycle", "walking"],
+      "motorcycleFallback": "motor_scooter",
+      "geometryEncoding": "polyline6",
+      "clientMayCallDirectlyInPrototype": true
+    },
+    "neshan": {
+      "role": "traffic-aware",
+      "endpoint": "https://api.neshan.org/v4/direction",
+      "method": "GET",
+      "authenticationHeader": "Api-Key",
+      "trafficAware": true,
+      "supportedModes": ["car", "motorcycle"],
+      "supportsAlternativeRoutes": true,
+      "supportsWaypoints": true,
+      "maximumWaypoints": 3,
+      "supportsTrafficZoneAvoidance": true,
+      "supportsOddEvenZoneAvoidance": true,
+      "geometryEncoding": "encoded-polyline",
+      "geometryPrecision": "must-be-verified-with-provider-fixture",
+      "requiresBackendProxy": true,
+      "apiKeyMayBeIncludedInClient": false
+    }
+  },
+  "providerSelection": {
+    "car": {
+      "trafficRequested": "neshan",
+      "trafficNotRequested": "valhalla"
+    },
+    "motorcycle": {
+      "trafficRequested": "neshan",
+      "trafficNotRequested": "valhalla"
+    },
+    "walking": {
+      "trafficRequested": "valhalla",
+      "trafficNotRequested": "valhalla"
+    },
+    "bicycle": {
+      "status": "not-implemented",
+      "provider": null
+    },
+    "publicTransit": {
+      "status": "not-implemented",
+      "provider": null
+    }
+  },
+  "fallbackPolicy": {
+    "trafficProviderUnavailable": "never-silently-label-a-non-traffic-route-as-traffic-aware",
+    "fallbackMustBeExplicit": true,
+    "responseMustInclude": ["provider", "trafficAware", "fallbackUsed", "fallbackReason"]
+  },
+  "normalizedRouteOption": {
+    "requiredFields": [
+      "id",
+      "provider",
+      "trafficAware",
+      "distanceMeters",
+      "durationSeconds",
+      "geometry",
+      "maneuvers"
+    ],
+    "geometry": {
+      "encoding": "encoded-polyline-or-geojson",
+      "providerEncodingMustBePreservedUntilDecoded": true
+    },
+    "maneuverFields": [
+      "instruction",
+      "streetName",
+      "type",
+      "modifier",
+      "distanceMeters",
+      "durationSeconds",
+      "geometry"
+    ]
+  }
+}
