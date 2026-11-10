@@ -74,7 +74,7 @@ struct RoutingService {
             throw RoutingError.noRoute
         }
 
-        let points = decodePolyline6(encodedShape)
+        let points = Polyline6Decoder.decode(encodedShape)
         guard points.count >= 2 else { throw RoutingError.invalidGeometry }
 
         let summary = (trip["summary"] as? [String: Any])
@@ -106,42 +106,6 @@ struct RoutingService {
             durationSeconds: duration,
             usedMotorcycleFallback: usedMotorcycleFallback
         )
-    }
-
-    private func decodePolyline6(_ encoded: String) -> [RouteCoordinate] {
-        let bytes = Array(encoded.utf8)
-        var index = 0
-        var latitude = 0
-        var longitude = 0
-        var points: [RouteCoordinate] = []
-
-        func nextDelta() -> Int? {
-            var result = 0
-            var shift = 0
-            var byte = 0
-            repeat {
-                guard index < bytes.count, shift <= 60 else { return nil }
-                byte = Int(bytes[index]) - 63
-                index += 1
-                result |= (byte & 0x1f) << shift
-                shift += 5
-            } while byte >= 0x20
-            return (result & 1) != 0 ? ~(result >> 1) : (result >> 1)
-        }
-
-        while index < bytes.count {
-            guard let deltaLatitude = nextDelta(),
-                  let deltaLongitude = nextDelta() else { break }
-            latitude += deltaLatitude
-            longitude += deltaLongitude
-            points.append(
-                RouteCoordinate(
-                    latitude: Double(latitude) / 1_000_000,
-                    longitude: Double(longitude) / 1_000_000
-                )
-            )
-        }
-        return points
     }
 
     enum RoutingError: LocalizedError {
