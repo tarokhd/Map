@@ -531,6 +531,27 @@ class RoutingService:
     ) -> RouteResponse:
         now = datetime.now(timezone.utc)
 
+        if request.traffic_preference == "live" and request.travel_mode == "walking":
+            if not request.allow_non_traffic_fallback:
+                raise ProviderNotConfigured(
+                    "Live-traffic routing is not available for walking; explicitly allow a non-traffic route."
+                )
+            options = await self.valhalla_provider.calculate(request, client)
+            options = [
+                option.model_copy(
+                    update={
+                        "fallback_used": True,
+                        "fallback_reason": "Live traffic routing is not available for walking."
+                    }
+                )
+                for option in options
+            ]
+            return RouteResponse(
+                options=options,
+                requested_traffic_preference=request.traffic_preference,
+                generated_at=now,
+            )
+
         if request.traffic_preference == "live" and request.travel_mode in ("car", "motorcycle"):
             try:
                 options = await self.neshan_provider.calculate(request, client)
@@ -563,16 +584,6 @@ class RoutingService:
                 )
 
         options = await self.valhalla_provider.calculate(request, client)
-        if request.traffic_preference == "live":
-            options = [
-                option.model_copy(
-                    update={
-                        "fallback_used": True,
-                        "fallback_reason": "Live traffic routing is not available for walking."
-                    }
-                )
-                for option in options
-            ]
         return RouteResponse(
             options=options,
             requested_traffic_preference=request.traffic_preference,
