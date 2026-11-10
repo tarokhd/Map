@@ -34,10 +34,11 @@
       "supportsTrafficZoneAvoidance": true,
       "supportsOddEvenZoneAvoidance": true,
       "geometryEncoding": "encoded-polyline",
-      "geometryPrecision": "must-be-verified-with-provider-fixture",
+      "geometryPrecision": 5,
       "requiresBackendProxy": true,
       "apiKeyMayBeIncludedInClient": false,
-      "waypointsLimit": "not-specified-in-current-official-docs"
+      "waypointsLimit": "not-specified-in-current-official-docs",
+      "geometryPrecisionEvidence": "decoded official documentation example first point matches documented start_location"
     }
   },
   "providerSelection": {
@@ -70,7 +71,8 @@
       "trafficAware",
       "fallbackUsed",
       "fallbackReason"
-    ]
+    ],
+    "explicitRequestField": "allow_non_traffic_fallback"
   },
   "normalizedRouteOption": {
     "requiredFields": [
