@@ -23,6 +23,13 @@ docker compose -f backend/compose.yml up --build
 
 Compose برای توسعه محلی است. پورت‌های API و دیتابیس فقط روی localhost bind شده‌اند و رمز پیش‌فرض صرفاً رمز توسعه است.
 
+## راهبرد مسیریابی
+
+- Valhalla سرویس پایه مسیریابی بدون ترافیک در نمونه اولیه است.
+- Neshan Direction API گزینه ترافیک‌محور خودرو و موتورسیکلت است؛ قرارداد provider در shared/models/routing-provider-contract.json و endpoint هدف در shared/api-contracts/openapi.yaml ثبت شده‌اند.
+- پیاده‌سازی proxy مسیریابی هنوز انجام نشده است. کلید Neshan باید فقط در secret محیط Backend نگهداری شود و هرگز در اپ‌های کلاینت یا Repository قرار نگیرد.
+- در صورت نبود سرویس ترافیکی، مسیر Valhalla باید صریحاً به‌عنوان مسیر بدون ترافیک مشخص شود.
+
 ## وضعیت پیاده‌سازی
 
 در این مرحله فقط سرویس health/readiness اجرا می‌شود و اتصال به دیتابیس در readiness بررسی می‌شود. جداول کاربران، مکان‌های ذخیره‌شده، تاریخچه مسیر و بازخورد نقشه در اسکیمای PostGIS تعریف شده‌اند.
