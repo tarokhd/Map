@@ -860,61 +860,73 @@
       }
 
       async function fetchRoute(start, end, mode) {
-        const costing = mode === "car" ? "auto" : mode === "walking" ? "pedestrian" : "motorcycle";
+        const costings = mode === "car"
+          ? ["auto"]
+          : mode === "walking"
+            ? ["pedestrian"]
+            : ["motorcycle", "motor_scooter"];
+
         const body = {
           locations: [{ lat: start.lat, lon: start.lon }, { lat: end.lat, lon: end.lon }],
-          costing: costing,
+          costing: costings[0],
           units: "kilometers",
           language: "en-US",
           shape_format: "polyline6",
           directions_type: "instructions",
           id: "iran-navigator-web-preview"
         };
-        let response = await fetch(VALHALLA_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Accept": "application/json" },
-          body: JSON.stringify(body)
-        });
-        let data = await response.json().catch(function () { return {}; });
-        if (!response.ok && mode === "motorcycle") {
-          body.costing = "motor_scooter";
-          response = await fetch(VALHALLA_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Accept": "application/json" },
-            body: JSON.stringify(body)
-          });
-          data = await response.json().catch(function () { return {}; });
-          if (response.ok) data._motorFallback = true;
-        }
-        if (!response.ok) throw new Error(data.error || data.status_message || "سرویس مسیریابی پاسخ مناسبی نداد (" + response.status + ").");
-        const trip = data.trip;
-        if (!trip || !trip.legs || !trip.legs.length) throw new Error("مسیر قابل استفاده‌ای پیدا نشد.");
-        const leg = trip.legs[0];
-        const points = decodePolyline6(leg.shape || "");
-        if (points.length < 2) throw new Error("هندسه مسیر از موتور مسیریابی دریافت نشد.");
-        const maneuvers = (leg.maneuvers || []).map(function (m) {
-          const names = Array.isArray(m.street_names) ? m.street_names.filter(Boolean) : [];
-          const street = names.join("، ");
-          return {
-            type: Number(m.type || 0),
-            instruction: localInstruction(Number(m.type || 0), street),
-            street: street,
-            lengthKm: Number(m.length || 0),
-            timeSeconds: Number(m.time || 0),
-            beginIndex: Number(m.begin_shape_index || 0),
-            endIndex: Number(m.end_shape_index || 0)
-          };
-        });
-        const summary = trip.summary || leg.summary || {};
-        return {
-          points: points,
-          maneuvers: maneuvers,
-          distanceKm: Number(summary.length || 0),
-          durationSeconds: Number(summary.time || 0),
-          motorFallback: Boolean(data._motorFallback)
-        };
-      }
 
+        let lastError = new Error("سرویس مسیریابی پاسخ مناسبی نداد.");
+        for (let attempt = 0; attempt < costings.length; attempt++) {
+          body.costing = costings[attempt];
+          try {
+            const response = await fetch(VALHALLA_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Accept": "application/json" },
+              body: JSON.stringify(body)
+            });
+            const data = await response.json().catch(function () { return {}; });
+            if (!response.ok) {
+              throw new Error(data.error || data.status_message || "سرویس مسیریابی پاسخ " + response.status + " داد.");
+            }
+
+            const trip = data.trip;
+            if (!trip || !trip.legs || !trip.legs.length) {
+              throw new Error("مسیر قابل استفاده‌ای پیدا نشد.");
+            }
+            const leg = trip.legs[0];
+            const points = decodePolyline6(leg.shape || "");
+            if (points.length < 2) {
+              throw new Error("هندسه مسیر از موتور مسیریابی دریافت نشد.");
+            }
+
+            const maneuvers = (leg.maneuvers || []).map(function (m) {
+              const names = Array.isArray(m.street_names) ? m.street_names.filter(Boolean) : [];
+              const street = names.join("، ");
+              return {
+                type: Number(m.type || 0),
+                instruction: localInstruction(Number(m.type || 0), street),
+                street: street,
+                lengthKm: Number(m.length || 0),
+                timeSeconds: Number(m.time || 0),
+                beginIndex: Number(m.begin_shape_index || 0),
+                endIndex: Number(m.end_shape_index || 0)
+              };
+            });
+            const summary = trip.summary || leg.summary || {};
+            return {
+              points: points,
+              maneuvers: maneuvers,
+              distanceKm: Number(summary.length || 0),
+              durationSeconds: Number(summary.time || 0),
+              motorFallback: attempt > 0
+            };
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError;
+      }
       async function calculateRoute() {
         if (!state.origin || !state.destination) {
           setStatus("ابتدا مبدأ و مقصد را انتخاب کنید.", "error");
