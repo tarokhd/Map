@@ -1,0 +1,34 @@
+name: IranNavigator
+options:
+  bundleIdPrefix: com.irannavigator
+  deploymentTarget:
+    iOS: "16.0"
+
+packages:
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-gl-native-distribution
+    from: 6.27.0
+
+targets:
+  IranNavigator:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    dependencies:
+      - package: MapLibre
+        product: MapLibre
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.irannavigator.ios
+        PRODUCT_NAME: IranNavigator
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Iran Navigator
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "برای نمایش موقعیت فعلی شما روی نقشه و ارائه راهنمای مسیریابی، به موقعیت مکانی نیاز داریم."
+        INFOPLIST_KEY_UIUserInterfaceStyle: Automatic
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+    scheme:
+      gatherCoverageData: false

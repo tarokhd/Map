@@ -1,0 +1,59 @@
+name: Build Iran Navigator iOS Simulator App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - "shared/**"
+      - ".github/workflows/ios-build.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - "shared/**"
+      - ".github/workflows/ios-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios-simulator:
+    name: Build iOS Simulator app
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies             -project ios/IranNavigator.xcodeproj             -scheme IranNavigator
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild             -project ios/IranNavigator.xcodeproj             -scheme IranNavigator             -sdk iphonesimulator             -configuration Debug             -destination 'generic/platform=iOS Simulator'             -derivedDataPath "$RUNNER_TEMP/IranNavigatorDerivedData"             CODE_SIGNING_ALLOWED=NO             build
+
+      - name: Package simulator app
+        run: |
+          APP_PATH="$RUNNER_TEMP/IranNavigatorDerivedData/Build/Products/Debug-iphonesimulator/IranNavigator.app"
+          test -d "$APP_PATH"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$GITHUB_WORKSPACE/IranNavigator-iOS-Simulator.zip"
+
+      - name: Upload simulator artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IranNavigator-iOS-Simulator-App
+          path: IranNavigator-iOS-Simulator.zip
+          if-no-files-found: error
+          retention-days: 14
