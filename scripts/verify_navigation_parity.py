@@ -83,10 +83,10 @@ if routing_contract["providerSelection"]["walking"]["trafficRequested"] != "valh
 
 route_path = openapi.get("paths", {}).get("/api/v1/routes", {}).get("post")
 if not route_path:
-    errors.append("OpenAPI: planned POST /api/v1/routes endpoint is missing")
+    errors.append("OpenAPI: POST /api/v1/routes endpoint is missing")
 else:
-    if route_path.get("x-implementation-status") != "planned":
-        errors.append("OpenAPI: route proxy must remain marked planned until implemented")
+    if route_path.get("x-implementation-status") != "implemented":
+        errors.append("OpenAPI: route proxy status must match the FastAPI implementation")
     request_schema = route_path.get("requestBody", {}).get("content", {}).get("application/json", {}).get("schema", {})
     if request_schema.get("$ref") != "#/components/schemas/RouteRequest":
         errors.append("OpenAPI: route request must use the shared RouteRequest schema")
