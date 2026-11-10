@@ -69,7 +69,35 @@ def check_styles():
         source = sources.get("openmaptiles")
         assert source and source.get("type") == "vector", f"{name}: openmaptiles vector source missing"
         assert "planet" in source.get("url", ""), f"{name}: unexpected vector tile URL"
-        print(f"PASS OpenFreeMap {name} style and vector source")
+
+        building_layers = [
+            layer for layer in style.get("layers", [])
+            if layer.get("source") == "openmaptiles" and layer.get("source-layer") == "building"
+        ]
+        assert building_layers, f"{name}: style does not reference the building vector layer"
+
+        tilejson = request_json(source["url"])
+        vector_layers = tilejson.get("vector_layers", [])
+        if vector_layers:
+            building = next((layer for layer in vector_layers if layer.get("id") == "building"), None)
+            assert building, "OpenFreeMap TileJSON does not advertise the building layer"
+            fields = building.get("fields", {})
+            if fields:
+                assert "render_height" in fields, "Building height attribute render_height is missing"
+
+        tile_templates = tilejson.get("tiles", [])
+        if tile_templates:
+            zoom = 15
+            tile_x = int((TEHRAN_START["lon"] + 180) / 360 * (2 ** zoom))
+            latitude_radians = math.radians(TEHRAN_START["lat"])
+            tile_y = int((1 - math.asinh(math.tan(latitude_radians)) / math.pi) / 2 * (2 ** zoom))
+            tile_url = tile_templates[0].replace("{z}", str(zoom)).replace("{x}", str(tile_x)).replace("{y}", str(tile_y))
+            tile_request = urllib.request.Request(tile_url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(tile_request, timeout=30) as tile_response:
+                tile_bytes = tile_response.read()
+            assert len(tile_bytes) > 100, "OpenFreeMap Tehran vector tile is empty"
+
+        print(f"PASS OpenFreeMap {name} style, building layer and Tehran vector tile")
 
 def check_photon():
     query = urllib.parse.urlencode({
