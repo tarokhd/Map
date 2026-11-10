@@ -63,6 +63,13 @@ require("iOS", "routing", '"shape_format": "polyline6"', "polyline6 route reques
 require("iOS", "location", "NavigationLocationQuality.isUsable", "fresh and accurate GPS validation")
 require("iOS", "view", "distanceAlongRoute", "distance-along-route guidance progress")
 
+require("Web", "app", '<script type="module">', "ES module application entry point")
+require("Web", "app", 'import("https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.mjs")', "MapLibre GL JS v6 ESM import")
+require("Web", "app", "typeof maplibregl.Map", "MapLibre ESM namespace validation")
+require("Web", "app", "کتابخانه نقشه بارگذاری نشد", "visible MapLibre import error")
+if 'maplibre-gl.js' in sources["Web"]["app"] or 'window.maplibregl' in sources["Web"]["app"]:
+    errors.append("Web: legacy UMD script/global reference must not be used with MapLibre GL JS v6")
+
 require("Web", "app", 'source: "openfreemap"', "vector tile source")
 require("Web", "app", '"source-layer": "building"', "3D building source-layer")
 require("Web", "app", '"fill-extrusion-height"', "3D building height attribute")
