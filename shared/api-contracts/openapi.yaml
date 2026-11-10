@@ -36,7 +36,7 @@ paths:
         car and motorcycle routes may use the licensed Neshan Direction API.
         Walking currently uses Valhalla. A non-traffic fallback must be
         explicitly identified and must never be labeled traffic-aware.
-      x-implementation-status: planned
+      x-implementation-status: implemented
       requestBody:
         required: true
         content:
