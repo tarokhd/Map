@@ -438,9 +438,10 @@
         });
         map.on("click", function (event) {
           if (!state.selection) return;
+          const selected = state.selection;
           const point = { lon: event.lngLat.lng, lat: event.lngLat.lat, label: "نقطه انتخاب‌شده روی نقشه" };
-          assignPoint(state.selection, point);
-          state.selection = null;
+          assignPoint(selected, point);
+          if (selected === "destination") state.selection = null;
           updatePickButtons();
         });
       }
@@ -454,30 +455,7 @@
           map.addSource("openfreemap", { type: "vector", url: "https://tiles.openfreemap.org/planet" });
         }
 
-        if (state.is3D && !map.getLayer("iran-buildings-3d")) {
-          const layers = map.getStyle().layers || [];
-          let beforeId;
-          for (let i = 0; i < layers.length; i++) {
-            if (layers[i].type === "symbol" && layers[i].layout && layers[i].layout["text-field"]) {
-              beforeId = layers[i].id;
-              break;
-            }
-          }
-          map.addLayer({
-            id: "iran-buildings-3d",
-            source: "openfreemap",
-            "source-layer": "building",
-            type: "fill-extrusion",
-            minzoom: 14.5,
-            filter: ["!=", ["get", "hide_3d"], true],
-            paint: {
-              "fill-extrusion-color": state.theme === "dark" ? "#71879c" : "#b5c6d6",
-              "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["coalesce", ["get", "render_height"], ["get", "height"], 8]],
-              "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0],
-              "fill-extrusion-opacity": 0.88
-            }
-          }, beforeId);
-        }
+        if (state.is3D) addBuildingLayer();
 
         map.addSource("route-source", { type: "geojson", data: emptyFeatureCollection() });
         map.addLayer({
@@ -517,6 +495,35 @@
         return { type: "FeatureCollection", features: [] };
       }
 
+      function addBuildingLayer() {
+        if (!map || !state.is3D || map.getLayer("iran-buildings-3d")) return;
+        if (!map.getSource("openfreemap")) {
+          map.addSource("openfreemap", { type: "vector", url: "https://tiles.openfreemap.org/planet" });
+        }
+        const layers = map.getStyle().layers || [];
+        let beforeId;
+        for (let i = 0; i < layers.length; i++) {
+          if (layers[i].type === "symbol" && layers[i].layout && layers[i].layout["text-field"]) {
+            beforeId = layers[i].id;
+            break;
+          }
+        }
+        map.addLayer({
+          id: "iran-buildings-3d",
+          source: "openfreemap",
+          "source-layer": "building",
+          type: "fill-extrusion",
+          minzoom: 14.5,
+          filter: ["!=", ["get", "hide_3d"], true],
+          paint: {
+            "fill-extrusion-color": state.theme === "dark" ? "#71879c" : "#b5c6d6",
+            "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["coalesce", ["get", "render_height"], ["get", "height"], 8]],
+            "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0],
+            "fill-extrusion-opacity": 0.88
+          }
+        }, beforeId);
+      }
+
       function setTheme(theme) {
         state.theme = theme;
         document.body.classList.toggle("light", theme === "light");
@@ -539,7 +546,7 @@
         $("threeDButton").textContent = state.is3D ? "3D" : "2D";
         if (!map) return;
         if (state.is3D && !map.getLayer("iran-buildings-3d")) {
-          setupMapLayers();
+          addBuildingLayer();
         } else if (!state.is3D && map.getLayer("iran-buildings-3d")) {
           map.removeLayer("iran-buildings-3d");
         }
@@ -704,7 +711,7 @@
             duration: 800
           });
         }
-        if (state.navigating) {
+        if (state.navigating && coords.accuracy <= 65) {
           followCamera(position);
           updateNavigationProgress(position);
         }
@@ -1124,7 +1131,6 @@
         state.smoothBearing = null;
         $("startButton").textContent = "توقف مسیریابی";
         $("startButton").classList.add("active");
-        $("startButton").onclick = stopNavigation;
         setStatus("مسیریابی زنده فعال شد؛ اجازه موقعیت مکانی را تأیید کنید.", "good");
         startWatch();
         if (state.userPosition) {
@@ -1139,7 +1145,6 @@
         if ("speechSynthesis" in window) window.speechSynthesis.cancel();
         $("startButton").textContent = "شروع مسیریابی زنده";
         $("startButton").classList.remove("active");
-        $("startButton").onclick = startNavigation;
         if (map) map.easeTo({ pitch: state.is3D ? 48 : 0, duration: 450 });
         setStatus("مسیریابی متوقف شد.");
       }
@@ -1281,7 +1286,10 @@
         $("swapRoute").addEventListener("click", swapRoute);
         $("clearRoute").addEventListener("click", clearAll);
         $("calculateButton").addEventListener("click", calculateRoute);
-        $("startButton").addEventListener("click", startNavigation);
+        $("startButton").addEventListener("click", function () {
+          if (state.navigating) stopNavigation();
+          else startNavigation();
+        });
         $("searchButton").addEventListener("click", function () { runSearch(null); });
         $("globalSearch").addEventListener("keydown", function (event) {
           if (event.key === "Enter") runSearch(null);
