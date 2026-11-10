@@ -24,6 +24,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://navigator:${POSTGRES_PASSWORD:-local-dev-only-change-me}@db:5432/iran_navigator
+      NESHAN_API_KEY: ${NESHAN_API_KEY:-}
+      VALHALLA_ROUTE_URL: ${VALHALLA_ROUTE_URL:-https://valhalla1.openstreetmap.de/route}
     depends_on:
       db:
         condition: service_healthy
