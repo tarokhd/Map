@@ -437,7 +437,7 @@
           container: "map",
           style: STYLE_DARK,
           center: TEHRAN,
-          zoom: 13.2,
+          zoom: 15.2,
           pitch: 48,
           bearing: -12,
           antialias: true,
@@ -530,13 +530,25 @@
           source: "openfreemap",
           "source-layer": "building",
           type: "fill-extrusion",
-          minzoom: 14.5,
-          filter: ["!=", ["get", "hide_3d"], true],
+          minzoom: 14,
+          filter: [
+            "all",
+            ["!=", ["get", "hide_3d"], true],
+            ["any", ["has", "render_height"], ["has", "height"]]
+          ],
           paint: {
             "fill-extrusion-color": state.theme === "dark" ? "#71879c" : "#b5c6d6",
-            "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14.5, 0, 16, ["coalesce", ["get", "render_height"], ["get", "height"], 8]],
-            "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0],
-            "fill-extrusion-opacity": 0.88
+            "fill-extrusion-height": [
+              "interpolate", ["linear"], ["zoom"],
+              14, 0,
+              15, ["coalesce", ["get", "render_height"], ["get", "height"], 0]
+            ],
+            "fill-extrusion-base": [
+              "interpolate", ["linear"], ["zoom"],
+              14, 0,
+              15, ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0]
+            ],
+            "fill-extrusion-opacity": 0.92
           }
         }, beforeId);
       }
@@ -567,7 +579,11 @@
         } else if (!state.is3D && map.getLayer("iran-buildings-3d")) {
           map.removeLayer("iran-buildings-3d");
         }
-        map.easeTo({ pitch: state.is3D ? 55 : 0, duration: 650 });
+        map.easeTo({
+          zoom: state.is3D ? Math.max(map.getZoom(), 15.0) : map.getZoom(),
+          pitch: state.is3D ? 55 : 0,
+          duration: 650
+        });
       }
 
       function markerElement(kind) {
