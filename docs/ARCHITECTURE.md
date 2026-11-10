@@ -42,13 +42,13 @@ Route geometry is requested as polyline6. GeoJSON coordinates use [longitude, la
 - Neshan credentials must be held by the Backend only; never embed the Api-Key in Android, iOS, Web or a public repository.
 - Walking remains on the baseline provider until a traffic-aware pedestrian provider is explicitly verified.
 - If a live-traffic provider is unavailable, the app must not silently label a non-traffic route as traffic-aware. Any fallback must be clearly identified in the normalized response.
-- The API contract is planned in shared/api-contracts/openapi.yaml; the Backend currently does not implement route proxying.
+- The route API is implemented in shared/api-contracts/openapi.yaml and backend/app/routing.py. Live Neshan routing still requires NESHAN_API_KEY; no client contains the provider key.
 
 ## Shared data flow
 
 Android, iOS and Web should communicate with the Backend over HTTPS REST APIs. The Backend authenticates the caller, enforces per-user authorization, validates inputs, and reads/writes PostgreSQL/PostGIS. Client apps must never contain database credentials or connect directly to PostgreSQL.
 
-The current backend only implements /healthz and /readyz. Saved-place and route-history endpoints are planned in the OpenAPI contract and database schema but are not implemented yet. Cross-device synchronization is therefore not active.
+The current backend implements /healthz, /readyz and POST /api/v1/routes. Saved-place and route-history endpoints are still planned and not implemented. Cross-device synchronization is therefore not active.
 
 ## iOS signing
 
