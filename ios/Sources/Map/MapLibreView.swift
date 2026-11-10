@@ -28,9 +28,9 @@ struct MapLibreView: UIViewRepresentable {
         mapView.allowsZooming = true
         mapView.allowsScrolling = true
         mapView.attributionButtonPosition = .topLeft
-        mapView.attributionButtonMargins = CGPoint(x: 12, y: 82)
+        mapView.attributionButtonMargins = CGPoint(x: 12, y: 128)
         mapView.compassViewPosition = .topLeft
-        mapView.compassViewMargins = CGPoint(x: 12, y: 128)
+        mapView.compassViewMargins = CGPoint(x: 12, y: 178)
         let initialCenter = CLLocationCoordinate2D(latitude: 35.7006, longitude: 51.4050)
         mapView.setCenter(initialCenter, zoomLevel: 13.8, animated: false)
         let initialCamera = MLNMapCamera(
