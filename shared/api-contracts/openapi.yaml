@@ -171,7 +171,6 @@ components:
           $ref: "#/components/schemas/Coordinates"
         waypoints:
           type: array
-          maxItems: 3
           items:
             $ref: "#/components/schemas/Coordinates"
         travel_mode:
