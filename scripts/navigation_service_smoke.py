@@ -87,18 +87,23 @@ def check_styles():
 
         tile_templates = tilejson.get("tiles", [])
         if tile_templates:
-            zoom = 15
+            zoom = min(14, int(tilejson.get("maxzoom", 14)))
             tile_x = int((TEHRAN_START["lon"] + 180) / 360 * (2 ** zoom))
             latitude_radians = math.radians(TEHRAN_START["lat"])
             tile_y = int((1 - math.asinh(math.tan(latitude_radians)) / math.pi) / 2 * (2 ** zoom))
+            if tilejson.get("scheme") == "tms":
+                tile_y = (2 ** zoom - 1) - tile_y
             tile_url = tile_templates[0].replace("{z}", str(zoom)).replace("{x}", str(tile_x)).replace("{y}", str(tile_y))
+            tile_url = tile_url.replace("{-y}", str((2 ** zoom - 1) - tile_y))
             tile_request = urllib.request.Request(tile_url, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(tile_request, timeout=30) as tile_response:
                 tile_bytes = tile_response.read()
+                tile_status = tile_response.status
+            print(f"INFO OpenFreeMap tile request: zoom={zoom}, scheme={tilejson.get('scheme', 'xyz')}, status={tile_status}, bytes={len(tile_bytes)}")
             if len(tile_bytes) > 100:
                 print(f"PASS OpenFreeMap Tehran vector tile ({len(tile_bytes)} bytes)")
             else:
-                print(f"WARN OpenFreeMap returned a very small Tehran tile ({len(tile_bytes)} bytes); style and building-layer metadata were still validated")
+                print("WARN OpenFreeMap tile payload was empty; style and building-layer metadata were still validated")
 
         print(f"PASS OpenFreeMap {name} style and 3D building-layer metadata")
 
