@@ -331,9 +331,25 @@
   <div class="map-hint">برای انتخاب مبدأ یا مقصد، حالت انتخاب را فعال کنید و روی نقشه بزنید.</div>
   <div id="toast" class="toast"></div>
 
-  <script src="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js"></script>
-  <script>
-    (function () {
+  <script type="module">
+    (async function () {
+      let maplibregl;
+      try {
+        maplibregl = await import("https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.mjs");
+      } catch (error) {
+        console.error("Iran Navigator: MapLibre module failed to load.", error);
+        const statusLine = document.getElementById("statusLine");
+        const connectionStatus = document.getElementById("connectionStatus");
+        const message = "کتابخانه نقشه بارگذاری نشد. اتصال به unpkg.com را بررسی کنید.";
+        if (statusLine) {
+          statusLine.textContent = message;
+          statusLine.style.color = "#ef6268";
+        }
+        if (connectionStatus) connectionStatus.textContent = "خطا در بارگذاری نقشه";
+        return;
+      }
+
+      (function () {
       "use strict";
 
       const STYLE_DARK = "https://tiles.openfreemap.org/styles/dark";
@@ -413,7 +429,7 @@
       }
 
       function initMap() {
-        if (!window.maplibregl) {
+        if (!maplibregl || typeof maplibregl.Map !== "function") {
           setStatus("کتابخانه نقشه بارگذاری نشد. اتصال اینترنت یا CDN را بررسی کنید.", "error");
           return;
         }
@@ -1352,6 +1368,7 @@
 
       bindEvents();
       initMap();
+      })();
     })();
   </script>
 </body>
