@@ -769,6 +769,7 @@
           button.classList.toggle("active", button.dataset.mode === mode);
         });
         state.route = null;
+        state.lastMatchedRouteIndex = 0;
         $("startButton").disabled = true;
         $("routeSummary").classList.remove("visible");
         $("guidance").classList.remove("visible");
@@ -1252,6 +1253,7 @@
       }
 
       function swapRoute() {
+        if (state.navigating) stopNavigation();
         const temp = state.origin;
         state.origin = state.destination;
         state.destination = temp;
