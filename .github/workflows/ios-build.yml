@@ -63,21 +63,12 @@ jobs:
             -project ios/IranNavigator.xcodeproj \
             -scheme IranNavigator
 
-      - name: Select iPhone simulator
-        run: |
-          SIMULATOR_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')"
-          if [ -z "$SIMULATOR_ID" ]; then
-            echo "No available iPhone simulator was found."
-            exit 1
-          fi
-          echo "IOS_SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
-
       - name: Run iOS unit and UI tests
         run: |
           xcodebuild \
             -project ios/IranNavigator.xcodeproj \
             -scheme IranNavigator \
-            -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_ID" \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             -derivedDataPath "$RUNNER_TEMP/IranNavigatorTestDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/IranNavigatorTests.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
