@@ -35,5 +35,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify Android, iOS and Web parity
+      - name: Install OpenAPI YAML parser
+        run: python -m pip install pyyaml
+
+      - name: Verify Android, iOS, Web and route provider contracts
         run: python scripts/verify_navigation_parity.py
