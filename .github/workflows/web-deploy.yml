@@ -28,19 +28,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate MapLibre v5 UMD assets and app script
+      - name: Validate original MapLibre v6.17 UMD assets and app script
         run: |
           test -s web/index.html
-          grep -q 'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js' web/index.html
-          grep -q 'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css' web/index.html
-          curl -fLsS --retry 2 --retry-delay 2 -o /dev/null https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js
-          curl -fLsS --retry 2 --retry-delay 2 -o /dev/null https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css
+          grep -q 'https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js' web/index.html
+          grep -q 'https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css' web/index.html
+          curl -fLsS --retry 2 --retry-delay 2 -o /dev/null https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js
+          curl -fLsS --retry 2 --retry-delay 2 -o /dev/null https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css
           node - <<'NODE'
           const fs = require('fs');
           const html = fs.readFileSync('web/index.html', 'utf8');
-          const external = '<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>';
+          const external = '<script src="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js"></script>';
           const externalIndex = html.indexOf(external);
-          if (externalIndex < 0) throw new Error('Restored MapLibre UMD script tag not found');
+          if (externalIndex < 0) throw new Error('Original MapLibre UMD script tag not found');
           const marker = '<script>';
           const start = html.indexOf(marker, externalIndex + external.length);
           const end = html.indexOf('</script>', start + marker.length);
