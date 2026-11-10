@@ -1,0 +1,41 @@
+{
+  "version": "0.3.0",
+  "travelModes": {
+    "car": {
+      "valhallaCosting": "auto",
+      "fallbackCostings": []
+    },
+    "motorcycle": {
+      "valhallaCosting": "motorcycle",
+      "fallbackCostings": ["motor_scooter"]
+    },
+    "walking": {
+      "valhallaCosting": "pedestrian",
+      "fallbackCostings": []
+    }
+  },
+  "maneuvers": {
+    "2": "از سمت راست حرکت را آغاز کنید",
+    "3": "از سمت چپ حرکت را آغاز کنید",
+    "22": "به مسیر مستقیم ادامه دهید",
+    "37": "از سمت راست به مسیر اصلی ادغام شوید",
+    "38": "از سمت چپ به مسیر اصلی ادغام شوید",
+    "39": "وارد آسانسور شوید",
+    "40": "از پله‌ها استفاده کنید",
+    "41": "از پله‌برقی استفاده کنید",
+    "42": "وارد ساختمان شوید",
+    "43": "از ساختمان خارج شوید",
+    "44": "به طبقه یا تراز دیگری بروید",
+    "45": "وسیله نقلیه را پارک کنید"
+  },
+  "map3D": {
+    "sourceLayer": "building",
+    "heightAttribute": "render_height",
+    "baseHeightAttribute": "render_min_height"
+  },
+  "routeGeometry": {
+    "shapeFormat": "polyline6",
+    "coordinateOrder": "latitude-longitude-in-route-api",
+    "geoJSONOrder": "longitude-latitude"
+  }
+}

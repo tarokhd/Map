@@ -30,5 +30,43 @@ targets:
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
-    scheme:
-      gatherCoverageData: false
+
+  IranNavigatorTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/Unit
+    dependencies:
+      - target: IranNavigator
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.irannavigator.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+
+  IranNavigatorUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/UI
+    dependencies:
+      - target: IranNavigator
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.irannavigator.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: IranNavigator
+        SWIFT_VERSION: "5.0"
+
+schemes:
+  IranNavigator:
+    build:
+      targets:
+        IranNavigator: all
+        IranNavigatorTests: [test]
+        IranNavigatorUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - IranNavigatorTests
+        - IranNavigatorUITests
