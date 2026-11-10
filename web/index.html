@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b1524">
   <meta name="description" content="Iran Navigator - نقشه سه‌بعدی و مسیریابی آزمایشی ایران">
   <title>Iran Navigator | نقشه و مسیریاب</title>
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="./vendor/maplibre-gl.css">
   <style>
     :root {
       color-scheme: dark;
@@ -335,12 +335,12 @@
     (async function () {
       let maplibregl;
       try {
-        maplibregl = await import("https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.mjs");
+        maplibregl = await import("./vendor/maplibre-gl.mjs");
       } catch (error) {
         console.error("Iran Navigator: MapLibre module failed to load.", error);
         const statusLine = document.getElementById("statusLine");
         const connectionStatus = document.getElementById("connectionStatus");
-        const message = "کتابخانه نقشه بارگذاری نشد. اتصال به unpkg.com را بررسی کنید.";
+        const message = "فایل محلی کتابخانه نقشه بارگذاری نشد. صفحه را تازه‌سازی کنید؛ اگر مشکل باقی ماند، انتشار نسخه وب را بررسی می‌کنیم." ;
         if (statusLine) {
           statusLine.textContent = message;
           statusLine.style.color = "#ef6268";
@@ -430,7 +430,7 @@
 
       function initMap() {
         if (!maplibregl || typeof maplibregl.Map !== "function") {
-          setStatus("کتابخانه نقشه بارگذاری نشد. اتصال اینترنت یا CDN را بررسی کنید.", "error");
+          setStatus("فایل محلی کتابخانه نقشه بارگذاری نشد. صفحه را تازه‌سازی کنید.", "error");
           return;
         }
         map = new maplibregl.Map({
