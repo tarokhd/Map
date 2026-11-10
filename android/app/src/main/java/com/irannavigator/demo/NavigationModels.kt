@@ -8,7 +8,10 @@ data class NavPoint(
 enum class TravelMode(val costing: String, val label: String) {
     CAR("auto", "خودرو"),
     MOTORCYCLE("motorcycle", "موتورسیکلت"),
-    WALKING("pedestrian", "پیاده‌روی")
+    WALKING("pedestrian", "پیاده‌روی");
+
+    fun costingCandidates(): List<String> =
+        if (this == MOTORCYCLE) listOf("motorcycle", "motor_scooter") else listOf(costing)
 }
 
 data class RouteManeuver(
@@ -24,15 +27,26 @@ data class RouteResult(
     val points: List<NavPoint>,
     val maneuvers: List<RouteManeuver>,
     val distanceKm: Double,
-    val durationSeconds: Double
+    val durationSeconds: Double,
+    val usedMotorcycleFallback: Boolean = false
 )
 
 object PersianInstructionFormatter {
     fun instruction(type: Int, streetName: String): String {
+        val street = streetName.trim()
+        val hasStreet = street.isNotBlank() && !street.equals("unnamed road", ignoreCase = true)
+
+        if (type == 7 && hasStreet) return "مسیر به $street تبدیل می‌شود"
+
         val action = when (type) {
-            1, 2, 3 -> "حرکت را آغاز کنید"
-            4, 5, 6 -> "به مقصد رسیده‌اید"
-            7, 8 -> "به مسیر مستقیم ادامه دهید"
+            0 -> "به مسیر ادامه دهید"
+            1 -> "حرکت را آغاز کنید"
+            2 -> "از سمت راست حرکت را آغاز کنید"
+            3 -> "از سمت چپ حرکت را آغاز کنید"
+            4 -> "به مقصد رسیده‌اید"
+            5 -> "از سمت راست به مقصد می‌رسید"
+            6 -> "از سمت چپ به مقصد می‌رسید"
+            7, 8, 22 -> "به مسیر مستقیم ادامه دهید"
             9 -> "کمی به سمت راست متمایل شوید"
             10 -> "به راست بپیچید"
             11 -> "با زاویه تند به راست بپیچید"
@@ -45,7 +59,6 @@ object PersianInstructionFormatter {
             19 -> "از رمپ سمت چپ وارد شوید"
             20 -> "خروجی سمت راست را انتخاب کنید"
             21 -> "خروجی سمت چپ را انتخاب کنید"
-            22 -> "در مسیر مستقیم بمانید"
             23 -> "در سمت راست مسیر بمانید"
             24 -> "در سمت چپ مسیر بمانید"
             25 -> "به مسیر ادغام شوید"
@@ -53,14 +66,26 @@ object PersianInstructionFormatter {
             27 -> "از میدان خارج شوید"
             28 -> "وارد مسیر کشتی شوید"
             29 -> "از مسیر کشتی خارج شوید"
+            30 -> "وارد مسیر حمل‌ونقل عمومی شوید"
+            31 -> "وسیله یا خط حمل‌ونقل را عوض کنید"
+            32 -> "در همین وسیله بمانید"
+            33 -> "به مسیر اتصال حمل‌ونقل عمومی بروید"
+            34 -> "در مسیر اتصال، وسیله را عوض کنید"
+            35, 36 -> "به مقصد حمل‌ونقل عمومی رسیده‌اید"
+            37 -> "از سمت راست به مسیر اصلی ادغام شوید"
+            38 -> "از سمت چپ به مسیر اصلی ادغام شوید"
+            39 -> "وارد آسانسور شوید"
+            40 -> "از پله‌ها استفاده کنید"
+            41 -> "از پله‌برقی استفاده کنید"
+            42 -> "وارد ساختمان شوید"
+            43 -> "از ساختمان خارج شوید"
+            44 -> "به طبقه یا تراز دیگری بروید"
+            45 -> "وسیله نقلیه را پارک کنید"
             else -> "به مسیر ادامه دهید"
         }
-        val street = streetName.trim()
-        return if (street.isBlank() || street.equals("unnamed road", ignoreCase = true)) {
-            action
-        } else {
-            "$action و وارد $street شوید"
-        }
+
+        val streetlessTypes = setOf(4, 5, 6, 28, 29, 30, 31, 32, 33, 34, 35, 36, 39, 40, 41, 42, 43, 44, 45)
+        return if (!hasStreet || type in streetlessTypes) action else "$action و وارد $street شوید"
     }
 
     fun distance(meters: Double): String {
@@ -70,7 +95,7 @@ object PersianInstructionFormatter {
             val rounded = if (km < 10.0) String.format(java.util.Locale.US, "%.1f", km) else km.toInt().toString()
             "${toPersianDigits(rounded)} کیلومتر"
         } else {
-            "${toPersianDigits(safe.toInt().toString())} متر"
+            "${toPersianDigits(kotlin.math.round(safe).toInt().toString())} متر"
         }
     }
 
