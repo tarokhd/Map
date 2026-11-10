@@ -42,17 +42,25 @@ jobs:
             -project ios/IranNavigator.xcodeproj \
             -scheme IranNavigator
 
-      - name: Run iOS unit and UI tests
+      - name: Prepare iPhone simulator and simulated GPS
         run: |
           SIMULATOR_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')"
           if [ -z "$SIMULATOR_ID" ]; then
             echo "No available iPhone simulator was found."
             exit 1
           fi
+          echo "IOS_SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcrun simctl privacy "$SIMULATOR_ID" grant location com.irannavigator.ios
+          xcrun simctl location "$SIMULATOR_ID" set 35.7006,51.4050
+
+      - name: Run iOS unit and UI tests
+        run: |
           xcodebuild \
             -project ios/IranNavigator.xcodeproj \
             -scheme IranNavigator \
-            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_ID" \
             -derivedDataPath "$RUNNER_TEMP/IranNavigatorTestDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/IranNavigatorTests.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
