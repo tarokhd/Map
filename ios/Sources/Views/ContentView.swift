@@ -310,6 +310,15 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 2)
+
+                HStack(spacing: 5) {
+                    Link("© OpenStreetMap contributors", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
+                    Text("·").foregroundStyle(secondaryText)
+                    Link("OpenFreeMap", destination: URL(string: "https://openfreemap.org/")!)
+                }
+                .font(.caption2)
+                .tint(secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(16)
         }
