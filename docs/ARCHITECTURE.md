@@ -1,5 +1,13 @@
 # Iran Navigator Architecture and Quality Gates
 
+## Product scope
+
+The Persian product feature-parity specification and phased roadmap live in docs/PRODUCT_FEATURE_PARITY_FA.md. It separates implemented prototype capabilities from product goals and external data dependencies.
+
+## Web map renderer
+
+The Web client is pinned to MapLibre GL JS 5.24.0 using the UMD browser bundle. Version 6 is ESM-only and removed the UMD file; do not restore a v6 UMD script URL. Any renderer upgrade must validate the matching JS, CSS and worker assets and be tested in a real browser before deployment.
+
 ## Monorepo
 
 - android/: Kotlin + MapLibre Native Android app.
