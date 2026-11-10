@@ -47,19 +47,27 @@ for platform in sources:
 require("Android", "map", 'FillExtrusionLayer("iran-buildings-3d", "openmaptiles")', "3D building source")
 require("Android", "map", 'buildings.sourceLayer = "building"', "3D building source-layer")
 require("Android", "map", 'Expression.get("render_height")', "3D building height attribute")
+require("Android", "map", '"user-accuracy-source"', "GPS accuracy radius")
 require("Android", "map", "LocationManager.GPS_PROVIDER", "GPS provider")
+require("Android", "map", "distanceAlongRoute", "distance-along-route guidance progress")
 require("Android", "routing", 'put("shape_format", "polyline6")', "polyline6 route request")
 
 require("iOS", "map", 'style.source(withIdentifier: "openmaptiles")', "3D building source")
 require("iOS", "map", 'buildings.sourceLayerIdentifier = "building"', "3D building source-layer")
 require("iOS", "map", 'forKeyPath: "render_height"', "3D building height attribute")
+require("iOS", "map", '"iran-user-accuracy-fill"', "GPS accuracy radius")
+require("iOS", "map", "pitch: show3DBuildings ? 50 : 0", "initial 3D camera pitch")
 require("iOS", "location", "kCLLocationAccuracyBestForNavigation", "high-accuracy CoreLocation")
 require("iOS", "routing", '"shape_format": "polyline6"', "polyline6 route request")
+require("iOS", "models", "NavigationLocationQuality.isUsable", "fresh and accurate GPS validation")
+require("iOS", "models", "distanceAlongRoute", "distance-along-route guidance progress")
 
 require("Web", "app", 'source: "openfreemap"', "vector tile source")
 require("Web", "app", '"source-layer": "building"', "3D building source-layer")
 require("Web", "app", '"fill-extrusion-height"', "3D building height attribute")
+require("Web", "app", '"accuracy-source"', "GPS accuracy radius")
 require("Web", "app", "navigator.geolocation.watchPosition", "continuous browser geolocation")
+require("Web", "app", "distanceAlongRoute", "distance-along-route guidance progress")
 require("Web", "app", 'shape_format: "polyline6"', "polyline6 route request")
 
 if errors:
