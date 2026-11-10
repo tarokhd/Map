@@ -1,6 +1,21 @@
+import CoreLocation
 import XCTest
 
 final class IranNavigatorUITests: XCTestCase {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        let simulatedLocation = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 35.7006, longitude: 51.4050),
+            altitude: 0,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            course: 90,
+            speed: 8,
+            timestamp: Date()
+        )
+        XCUIDevice.shared.location = XCUILocation(location: simulatedLocation)
+    }
+
     func testMainNavigationInterfaceLaunches() {
         let app = XCUIApplication()
         app.launch()
@@ -21,7 +36,7 @@ final class IranNavigatorUITests: XCTestCase {
         XCTAssertTrue(app.buttons["تغییر به نقشه سه‌بعدی"].waitForExistence(timeout: 5))
     }
 
-    func testCurrentLocationControlRequestsLocationWithoutCrashing() {
+    func testCurrentLocationControlReceivesSimulatedGPS() {
         let app = XCUIApplication()
         app.launch()
 
@@ -29,9 +44,17 @@ final class IranNavigatorUITests: XCTestCase {
         XCTAssertTrue(locateButton.waitForExistence(timeout: 20))
         locateButton.tap()
 
-        let status = app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS %@", "موقعیت")
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let allowButton = springboard.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Allow")
         ).firstMatch
-        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        if allowButton.waitForExistence(timeout: 3) {
+            allowButton.tap()
+        }
+
+        let gpsAccuracy = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "دقت GPS")
+        ).firstMatch
+        XCTAssertTrue(gpsAccuracy.waitForExistence(timeout: 15))
     }
 }
