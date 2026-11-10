@@ -95,6 +95,7 @@ class MainActivity : Activity() {
     private var lastRerouteAt = 0L
     private var lastCameraFollowAt = 0L
     private var lastCameraLocation: NavPoint? = null
+    private var smoothedCameraBearing: Double? = null
     private var routeRequestToken = 0
 
     private var routeSource: GeoJsonSource? = null
@@ -666,20 +667,14 @@ class MainActivity : Activity() {
         currentLocation = location
         updateLocationLayers(location)
 
-        if (centerOnNextLocation && !fromCache && location.accuracy <= 60f) {
+        if (isNavigating && !fromCache && location.accuracy <= 65f) {
+            val forceCenter = centerOnNextLocation
             centerOnNextLocation = false
-            val bearing = if (location.speed > 2f) location.bearing.toDouble() else 0.0
-            map?.animateCamera(
-                CameraUpdateFactory.newCameraPosition(
-                    CameraPosition.Builder()
-                        .target(LatLng(location.latitude, location.longitude))
-                        .zoom(17.0)
-                        .tilt(if (isNavigating) 58.0 else 48.0)
-                        .bearing(bearing)
-                        .build()
-                ),
-                550
-            )
+            followNavigationCamera(location, forceCenter)
+            updateNavigationProgress(location)
+        } else if (centerOnNextLocation && !fromCache && location.accuracy <= 60f) {
+            centerOnNextLocation = false
+            centerMapOnLocation(location)
         }
 
         if (pendingSetOriginFromGps && !fromCache && location.accuracy <= 60f) {
@@ -699,10 +694,7 @@ class MainActivity : Activity() {
             "موقعیت به‌روز شد؛ دقت گزارش‌شده $accuracyText متر."
         }
 
-        if (isNavigating && !fromCache && location.accuracy <= 65f) {
-            followNavigationCamera(location)
-            updateNavigationProgress(location)
-        }
+
     }
 
     private fun updateLocationLayers(location: Location) {
@@ -973,7 +965,13 @@ class MainActivity : Activity() {
         }
         map?.animateCamera(
             CameraUpdateFactory.newCameraPosition(
-                CameraPosition.Builder().target(center).zoom(zoom).tilt(46.0).bearing(0.0).build()
+                CameraPosition.Builder()
+                    .target(center)
+                    .zoom(zoom)
+                    .tilt(46.0)
+                    .bearing(0.0)
+                    .padding(0.0, dp(110).toDouble(), 0.0, dp(240).toDouble())
+                    .build()
             ),
             650
         )
@@ -1019,34 +1017,72 @@ class MainActivity : Activity() {
         }
         isNavigating = true
         trackingRequested = true
-        centerOnNextLocation = currentLocation?.let { !isFreshLocation(it) } ?: true
+        centerOnNextLocation = true
         offRouteCount = 0
         lastAnnouncedManeuver = -1
         lastCameraFollowAt = 0L
         lastCameraLocation = null
+        smoothedCameraBearing = null
         startLocationUpdates()
         refreshControlButtons()
         statusText.text = "مسیریابی زنده فعال شد؛ منتظر موقعیت دقیق GPS..."
         if (voiceEnabled) voice?.speak("مسیریابی شروع شد. ${selectedMode.label}.")
-        currentLocation?.takeIf { isFreshLocation(it) }?.let { updateNavigationProgress(it) }
+        currentLocation?.takeIf { isFreshLocation(it) && it.accuracy <= 65f }?.let {
+            centerOnNextLocation = false
+            followNavigationCamera(it, force = true)
+            updateNavigationProgress(it)
+        }
     }
 
     private fun stopNavigation() {
         isNavigating = false
+        centerOnNextLocation = false
+        smoothedCameraBearing = null
         voice?.stop()
+        resetCameraPadding()
         refreshControlButtons()
         statusText.text = "مسیریابی متوقف شد."
     }
 
-    private fun followNavigationCamera(location: Location) {
+    private fun centerMapOnLocation(location: Location) {
+        val currentBearing = map?.cameraPosition?.bearing ?: 0.0
+        val bearing = if (location.hasBearing() && location.speed > 2f) {
+            location.bearing.toDouble()
+        } else {
+            currentBearing
+        }
+        map?.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder()
+                    .target(LatLng(location.latitude, location.longitude))
+                    .zoom(17.0)
+                    .tilt(48.0)
+                    .bearing(bearing)
+                    .padding(0.0, 0.0, 0.0, 0.0)
+                    .build()
+            ),
+            650
+        )
+    }
+
+    private fun followNavigationCamera(location: Location, force: Boolean = false) {
         val now = System.currentTimeMillis()
         val point = NavPoint(location.latitude, location.longitude)
         val previous = lastCameraLocation
-        val movedEnough = previous == null || distanceMeters(previous, point) >= 7.0
-        if (!movedEnough || now - lastCameraFollowAt < 1800L) return
+        val movedMeters = previous?.let { distanceMeters(it, point) } ?: Double.MAX_VALUE
+        val movementThreshold = if (location.accuracy <= 25f) 3.0 else 7.0
+        if (!force && (movedMeters < movementThreshold || now - lastCameraFollowAt < 1400L)) return
 
-        val currentBearing = map?.cameraPosition?.bearing ?: 0.0
-        val bearing = if (location.speed > 2f) location.bearing.toDouble() else currentBearing
+        val currentBearing = smoothedCameraBearing ?: (map?.cameraPosition?.bearing ?: 0.0)
+        val targetBearing = if (location.hasBearing() && location.speed > 2f) {
+            location.bearing.toDouble()
+        } else {
+            currentBearing
+        }
+        val delta = ((targetBearing - currentBearing + 540.0) % 360.0) - 180.0
+        val bearing = (currentBearing + delta * 0.28 + 360.0) % 360.0
+        smoothedCameraBearing = bearing
+
         map?.animateCamera(
             CameraUpdateFactory.newCameraPosition(
                 CameraPosition.Builder()
@@ -1054,12 +1090,30 @@ class MainActivity : Activity() {
                     .zoom(17.2)
                     .tilt(58.0)
                     .bearing(bearing)
+                    .padding(0.0, dp(160).toDouble(), 0.0, dp(170).toDouble())
                     .build()
             ),
-            700
+            850
         )
         lastCameraFollowAt = now
         lastCameraLocation = point
+    }
+
+    private fun resetCameraPadding() {
+        val current = map?.cameraPosition ?: return
+        val target = current.target ?: LatLng(tehran.latitude, tehran.longitude)
+        map?.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder()
+                    .target(target)
+                    .zoom(current.zoom)
+                    .tilt(current.tilt)
+                    .bearing(current.bearing)
+                    .padding(0.0, 0.0, 0.0, 0.0)
+                    .build()
+            ),
+            350
+        )
     }
 
     private fun updateNavigationProgress(location: Location) {
@@ -1127,7 +1181,7 @@ class MainActivity : Activity() {
                     lastAnnouncedManeuver = -1
                     renderRoute()
                     renderPointMarkers()
-                    fitRoute(result)
+                    currentLocation?.let { followNavigationCamera(it, force = true) }
                     summaryText.text = "مسافت باقی‌مانده ${PersianInstructionFormatter.distance(result.distanceKm * 1000.0)}  •  ${PersianInstructionFormatter.duration(result.durationSeconds)}"
                     updateGuidanceCard(null)
                     statusText.text = "مسیر جدید محاسبه شد."
