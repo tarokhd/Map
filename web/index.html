@@ -249,7 +249,7 @@
     </div>
 
     <div class="top-actions">
-      <div class="top-status"><span class="pulse"></span><span id="connectionStatus">نقشه آماده است</span></div>
+      <div class="top-status"><span class="pulse"></span><span id="connectionStatus">در حال بارگذاری نقشه...</span></div>
       <button class="icon-btn" id="themeTop" title="تغییر پوسته" aria-label="تغییر پوسته">☼</button>
     </div>
   </header>
@@ -371,6 +371,7 @@
       };
 
       let map;
+      let mapLoadTimeout = null;
       let routeSourceReady = false;
       let userSourceReady = false;
       let accuracySourceReady = false;
@@ -415,22 +416,46 @@
 
       function initMap() {
         if (!maplibregl || typeof maplibregl.Map !== "function") {
-          setStatus("فایل محلی کتابخانه نقشه بارگذاری نشد. صفحه را تازه‌سازی کنید.", "error");
+          $("connectionStatus").textContent = "کتابخانه نقشه در دسترس نیست";
+          setStatus("کتابخانه MapLibre بارگذاری نشد. اتصال به CDN را بررسی کنید.", "error");
           return;
         }
-        map = new maplibregl.Map({
-          container: "map",
-          style: STYLE_DARK,
-          center: TEHRAN,
-          zoom: 15.2,
-          pitch: 48,
-          bearing: -12,
-          antialias: true,
-          attributionControl: true,
-          maxPitch: 75
-        });
+
+        $("connectionStatus").textContent = "در حال بارگذاری نقشه...";
+        setStatus("در حال دریافت نقشه پایه و اطلاعات شهر...", null);
+
+        try {
+          map = new maplibregl.Map({
+            container: "map",
+            style: STYLE_DARK,
+            center: TEHRAN,
+            zoom: 15.2,
+            pitch: 48,
+            bearing: -12,
+            antialias: true,
+            attributionControl: true,
+            maxPitch: 75
+          });
+        } catch (error) {
+          console.error("Iran Navigator: map initialization failed.", error);
+          $("connectionStatus").textContent = "خطای راه‌اندازی نقشه";
+          setStatus("مرورگر نتوانست نقشه را راه‌اندازی کند. پشتیبانی WebGL و شتاب‌دهی گرافیکی را بررسی کنید.", "error");
+          return;
+        }
+
+        mapLoadTimeout = window.setTimeout(function () {
+          if (!map || !map.isStyleLoaded()) {
+            $("connectionStatus").textContent = "بارگذاری نقشه طول کشیده است";
+            setStatus("دریافت نقشه بیش از ۲۵ ثانیه طول کشیده است. اتصال به سرویس نقشه یا درخواست‌های مسدودشده را بررسی کنید.", "error");
+          }
+        }, 25000);
+
         map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-left");
         map.on("load", function () {
+          if (mapLoadTimeout) {
+            window.clearTimeout(mapLoadTimeout);
+            mapLoadTimeout = null;
+          }
           setupMapLayers();
           $("connectionStatus").textContent = "نقشه آماده است";
           setStatus("نقشه آماده است؛ مبدأ و مقصد را انتخاب کنید.", "good");
