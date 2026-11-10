@@ -5,6 +5,13 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - ".github/workflows/build-android-apk.yml"
 
 permissions:
   contents: read
