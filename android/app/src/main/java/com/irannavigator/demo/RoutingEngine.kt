@@ -16,17 +16,41 @@ class RoutingEngine(
         destination: NavPoint,
         mode: TravelMode
     ): RouteResult {
+        var lastError: Exception? = null
+
+        for ((index, costing) in mode.costingCandidates().withIndex()) {
+            try {
+                return calculateWithCosting(
+                    origin = origin,
+                    destination = destination,
+                    costing = costing,
+                    usedMotorcycleFallback = index > 0
+                )
+            } catch (error: Exception) {
+                lastError = error
+            }
+        }
+
+        throw lastError ?: IllegalStateException("محاسبه مسیر ناموفق بود.")
+    }
+
+    private fun calculateWithCosting(
+        origin: NavPoint,
+        destination: NavPoint,
+        costing: String,
+        usedMotorcycleFallback: Boolean
+    ): RouteResult {
         val request = JSONObject().apply {
             put("locations", JSONArray().apply {
                 put(JSONObject().put("lat", origin.latitude).put("lon", origin.longitude))
                 put(JSONObject().put("lat", destination.latitude).put("lon", destination.longitude))
             })
-            put("costing", mode.costing)
+            put("costing", costing)
             put("units", "kilometers")
             put("language", "en-US")
             put("shape_format", "polyline6")
             put("directions_type", "instructions")
-            put("id", "iran-navigator-android-v0.2")
+            put("id", "iran-navigator-android-v0.3")
         }
 
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
@@ -36,8 +60,7 @@ class RoutingEngine(
             doOutput = true
             setRequestProperty("Content-Type", "application/json; charset=utf-8")
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "IranNavigatorPrototype/0.2")
-            setRequestProperty("X-Client-Id", "iran-navigator-prototype")
+            setRequestProperty("User-Agent", "IranNavigatorPrototype/0.3")
         }
 
         try {
@@ -102,7 +125,8 @@ class RoutingEngine(
                 points = points,
                 maneuvers = maneuvers,
                 distanceKm = distanceKm,
-                durationSeconds = durationSeconds
+                durationSeconds = durationSeconds,
+                usedMotorcycleFallback = usedMotorcycleFallback
             )
         } finally {
             connection.disconnect()
@@ -115,31 +139,30 @@ class RoutingEngine(
         var latitude = 0
         var longitude = 0
 
-        while (index < encoded.length) {
+        fun readDelta(): Int? {
             var result = 0
             var shift = 0
             var byte: Int
             do {
-                if (index >= encoded.length) return points
+                if (index >= encoded.length || shift > 30) return null
                 byte = encoded[index++].code - 63
+                if (byte < 0) return null
                 result = result or ((byte and 0x1f) shl shift)
                 shift += 5
             } while (byte >= 0x20)
-            val deltaLat = if ((result and 1) != 0) (result shr 1).inv() else (result shr 1)
-            latitude += deltaLat
+            return if ((result and 1) != 0) (result shr 1).inv() else (result shr 1)
+        }
 
-            result = 0
-            shift = 0
-            do {
-                if (index >= encoded.length) return points
-                byte = encoded[index++].code - 63
-                result = result or ((byte and 0x1f) shl shift)
-                shift += 5
-            } while (byte >= 0x20)
-            val deltaLon = if ((result and 1) != 0) (result shr 1).inv() else (result shr 1)
-            longitude += deltaLon
+        while (index < encoded.length) {
+            val deltaLatitude = readDelta() ?: return points
+            val deltaLongitude = readDelta() ?: return points
+            latitude += deltaLatitude
+            longitude += deltaLongitude
 
-            points += NavPoint(latitude / 1_000_000.0, longitude / 1_000_000.0)
+            val lat = latitude / 1_000_000.0
+            val lon = longitude / 1_000_000.0
+            if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return emptyList()
+            points += NavPoint(lat, lon)
         }
         return points
     }
