@@ -34,10 +34,11 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const html = fs.readFileSync('web/index.html', 'utf8');
-          const start = html.indexOf('<script>');
-          const end = html.indexOf('</script>', start + 8);
-          if (start < 0 || end < 0) throw new Error('Inline application script not found');
-          fs.writeFileSync('/tmp/iran-navigator-web.js', html.slice(start + 8, end));
+          const marker = '<script type="module">';
+          const start = html.indexOf(marker);
+          const end = html.indexOf('</script>', start + marker.length);
+          if (start < 0 || end < 0) throw new Error('MapLibre ES module application script not found');
+          fs.writeFileSync('/tmp/iran-navigator-web.js', html.slice(start + marker.length, end));
           NODE
           node --check /tmp/iran-navigator-web.js
 
