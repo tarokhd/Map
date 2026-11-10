@@ -362,6 +362,7 @@
         lastCameraAt: 0,
         lastCameraPoint: null,
         smoothBearing: null,
+        lastMatchedRouteIndex: 0,
         routeRequest: 0,
         voiceAvailable: false,
         markers: { origin: null, destination: null, user: null },
@@ -591,7 +592,9 @@
           $("destinationInput").value = point.label || coordsLabel(point);
           setStatus("مقصد ثبت شد؛ مسیر جاده‌ای را محاسبه کنید.", "good");
         }
+        if (state.navigating) stopNavigation();
         state.route = null;
+        state.lastMatchedRouteIndex = 0;
         $("startButton").disabled = true;
         $("routeSummary").classList.remove("visible");
         $("guidance").classList.remove("visible");
@@ -760,6 +763,7 @@
       }
 
       function setMode(mode) {
+        if (state.navigating) stopNavigation();
         state.mode = mode;
         document.querySelectorAll(".mode-btn").forEach(function (button) {
           button.classList.toggle("active", button.dataset.mode === mode);
@@ -803,13 +807,13 @@
         const action = {
           0: "به مسیر ادامه دهید",
           1: "حرکت را آغاز کنید",
-          2: "به سمت راست حرکت کنید",
-          3: "به سمت چپ حرکت کنید",
+          2: "از سمت راست حرکت را آغاز کنید",
+          3: "از سمت چپ حرکت را آغاز کنید",
           4: "به مقصد رسیده‌اید",
           5: "از سمت راست به مقصد می‌رسید",
           6: "از سمت چپ به مقصد می‌رسید",
-          7: "مسیر به راه دیگری تبدیل می‌شود",
-          8: "مستقیم ادامه دهید",
+          7: "مسیر به خیابان دیگری تبدیل می‌شود",
+          8: "به مسیر مستقیم ادامه دهید",
           9: "کمی به راست متمایل شوید",
           10: "به راست بپیچید",
           11: "با زاویه تند به راست بپیچید",
@@ -823,7 +827,7 @@
           19: "از رمپ سمت چپ وارد شوید",
           20: "خروجی سمت راست را انتخاب کنید",
           21: "خروجی سمت چپ را انتخاب کنید",
-          22: "مستقیم ادامه دهید",
+          22: "به مسیر مستقیم ادامه دهید",
           23: "در سمت راست مسیر بمانید",
           24: "در سمت چپ مسیر بمانید",
           25: "به مسیر ادغام شوید",
@@ -831,13 +835,27 @@
           27: "از میدان خارج شوید",
           28: "وارد مسیر کشتی شوید",
           29: "از مسیر کشتی خارج شوید",
-          30: "به مسیر حمل‌ونقل عمومی بروید",
-          31: "خط یا وسیله را عوض کنید",
+          30: "وارد مسیر حمل‌ونقل عمومی شوید",
+          31: "وسیله یا خط حمل‌ونقل را عوض کنید",
           32: "در همین وسیله بمانید",
-          37: "از سمت راست ادغام شوید",
-          38: "از سمت چپ ادغام شوید"
+          33: "به مسیر اتصال حمل‌ونقل عمومی بروید",
+          34: "در مسیر اتصال، وسیله را عوض کنید",
+          35: "به مقصد حمل‌ونقل عمومی رسیده‌اید",
+          36: "به مقصد حمل‌ونقل عمومی رسیده‌اید",
+          37: "از سمت راست به مسیر اصلی ادغام شوید",
+          38: "از سمت چپ به مسیر اصلی ادغام شوید",
+          39: "وارد آسانسور شوید",
+          40: "از پله‌ها استفاده کنید",
+          41: "از پله‌برقی استفاده کنید",
+          42: "وارد ساختمان شوید",
+          43: "از ساختمان خارج شوید",
+          44: "به طبقه یا تراز دیگری بروید",
+          45: "وسیله نقلیه را پارک کنید"
         }[type] || "به مسیر ادامه دهید";
-        return street && street.toLowerCase() !== "unnamed road" ? action + " و وارد " + street + " شوید" : action;
+        const streetlessTypes = [4,5,6,28,29,30,31,32,33,34,35,36,39,40,41,42,43,44,45];
+        return street && street.toLowerCase() !== "unnamed road" && !streetlessTypes.includes(type)
+          ? action + " و وارد " + street + " شوید"
+          : action;
       }
 
       async function fetchRoute(start, end, mode) {
@@ -912,6 +930,7 @@
           const route = await fetchRoute(state.origin, state.destination, state.mode);
           if (token !== state.routeRequest) return;
           state.route = route;
+          state.lastMatchedRouteIndex = 0;
           state.currentManeuver = firstGuidanceIndex(route);
           state.lastSpoken = -1;
           state.offRouteCount = 0;
@@ -1003,11 +1022,12 @@
         return total;
       }
 
-      function nearestRoutePoint(point) {
-        let nearest = 0;
+      function nearestRoutePoint(point, previousIndex) {
+        let nearest = Math.max(0, Math.min(previousIndex || 0, state.route.points.length - 1));
         let best = Infinity;
         const pts = state.route.points;
-        for (let i = 0; i < pts.length; i++) {
+        const start = Math.max(0, (previousIndex || 0) - 3);
+        for (let i = start; i < pts.length; i++) {
           const d = haversine(point, pts[i]);
           if (d < best) { best = d; nearest = i; }
         }
@@ -1045,7 +1065,8 @@
       function updateNavigationProgress(position) {
         if (!state.route || !state.navigating) return;
         const current = { lat: position.coords.latitude, lon: position.coords.longitude };
-        const nearest = nearestRoutePoint(current);
+        const nearest = nearestRoutePoint(current, state.lastMatchedRouteIndex);
+        state.lastMatchedRouteIndex = Math.max(state.lastMatchedRouteIndex, nearest.index);
         if (nearest.distance > 80 && position.coords.accuracy <= 35) state.offRouteCount++;
         else state.offRouteCount = 0;
 
@@ -1125,6 +1146,7 @@
         }
         state.navigating = true;
         state.offRouteCount = 0;
+        state.lastMatchedRouteIndex = 0;
         state.lastSpoken = -1;
         state.lastCameraAt = 0;
         state.lastCameraPoint = null;
