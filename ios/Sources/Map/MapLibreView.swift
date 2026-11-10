@@ -258,8 +258,8 @@ struct MapLibreView: UIViewRepresentable {
                     forConstantValue: UIColor(red: 0.25, green: 0.67, blue: 1, alpha: 0.65)
                 )
 
-                if let routeLayer = style.layer(withIdentifier: "iran-route-casing") {
-                    style.insertLayer(fill, below: routeLayer)
+                if let firstSymbolLayer = style.layers.first(where: { $0 is MLNSymbolStyleLayer }) {
+                    style.insertLayer(fill, below: firstSymbolLayer)
                 } else {
                     style.addLayer(fill)
                 }
