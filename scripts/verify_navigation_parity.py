@@ -16,6 +16,7 @@ sources = {
         "routing": (ROOT / "ios/Sources/Services/RoutingService.swift").read_text(encoding="utf-8"),
         "map": (ROOT / "ios/Sources/Map/MapLibreView.swift").read_text(encoding="utf-8"),
         "location": (ROOT / "ios/Sources/Services/LocationService.swift").read_text(encoding="utf-8"),
+        "view": (ROOT / "ios/Sources/Views/ContentView.swift").read_text(encoding="utf-8"),
     },
     "Web": {
         "app": (ROOT / "web/index.html").read_text(encoding="utf-8"),
@@ -59,8 +60,8 @@ require("iOS", "map", '"iran-user-accuracy-fill"', "GPS accuracy radius")
 require("iOS", "map", "pitch: show3DBuildings ? 50 : 0", "initial 3D camera pitch")
 require("iOS", "location", "kCLLocationAccuracyBestForNavigation", "high-accuracy CoreLocation")
 require("iOS", "routing", '"shape_format": "polyline6"', "polyline6 route request")
-require("iOS", "models", "NavigationLocationQuality.isUsable", "fresh and accurate GPS validation")
-require("iOS", "models", "distanceAlongRoute", "distance-along-route guidance progress")
+require("iOS", "location", "NavigationLocationQuality.isUsable", "fresh and accurate GPS validation")
+require("iOS", "view", "distanceAlongRoute", "distance-along-route guidance progress")
 
 require("Web", "app", 'source: "openfreemap"', "vector tile source")
 require("Web", "app", '"source-layer": "building"', "3D building source-layer")
