@@ -23,6 +23,10 @@ enum TravelMode: String, CaseIterable, Identifiable, Equatable {
         case .walking: return "pedestrian"
         }
     }
+
+    var costingCandidates: [String] {
+        self == .motorcycle ? ["motorcycle", "motor_scooter"] : [valhallaCosting]
+    }
 }
 
 enum MapTheme: String, CaseIterable, Equatable {
@@ -79,6 +83,21 @@ struct NavigationRoute {
     let maneuvers: [RouteManeuver]
     let distanceKilometers: Double
     let durationSeconds: Double
+    let usedMotorcycleFallback: Bool
+
+    init(
+        points: [RouteCoordinate],
+        maneuvers: [RouteManeuver],
+        distanceKilometers: Double,
+        durationSeconds: Double,
+        usedMotorcycleFallback: Bool = false
+    ) {
+        self.points = points
+        self.maneuvers = maneuvers
+        self.distanceKilometers = distanceKilometers
+        self.durationSeconds = durationSeconds
+        self.usedMotorcycleFallback = usedMotorcycleFallback
+    }
 }
 
 struct PlaceSearchResult: Identifiable {
@@ -94,11 +113,23 @@ struct PlaceSearchResult: Identifiable {
 
 enum PersianInstructionFormatter {
     static func instruction(type: Int, streetName: String) -> String {
+        let street = streetName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasStreet = !street.isEmpty && street.lowercased() != "unnamed road"
+
+        if type == 7, hasStreet {
+            return "مسیر به (street) تبدیل می‌شود"
+        }
+
         let action: String
         switch type {
-        case 1, 2, 3: action = "حرکت را آغاز کنید"
-        case 4, 5, 6: action = "به مقصد رسیده‌اید"
-        case 7, 8, 22: action = "به مسیر مستقیم ادامه دهید"
+        case 0: action = "به مسیر ادامه دهید"
+        case 1: action = "حرکت را آغاز کنید"
+        case 2: action = "از سمت راست حرکت را آغاز کنید"
+        case 3: action = "از سمت چپ حرکت را آغاز کنید"
+        case 4: action = "به مقصد رسیده‌اید"
+        case 5: action = "از سمت راست به مقصد می‌رسید"
+        case 6: action = "از سمت چپ به مقصد می‌رسید"
+        case 7, 8: action = "به مسیر مستقیم ادامه دهید"
         case 9: action = "کمی به سمت راست متمایل شوید"
         case 10: action = "به راست بپیچید"
         case 11: action = "با زاویه تند به راست بپیچید"
@@ -111,19 +142,36 @@ enum PersianInstructionFormatter {
         case 19: action = "از رمپ سمت چپ وارد شوید"
         case 20: action = "خروجی سمت راست را انتخاب کنید"
         case 21: action = "خروجی سمت چپ را انتخاب کنید"
+        case 22: action = "به مسیر مستقیم ادامه دهید"
         case 23: action = "در سمت راست مسیر بمانید"
         case 24: action = "در سمت چپ مسیر بمانید"
-        case 25, 37, 38: action = "به مسیر ادغام شوید"
+        case 25: action = "به مسیر ادغام شوید"
         case 26: action = "وارد میدان شوید"
         case 27: action = "از میدان خارج شوید"
         case 28: action = "وارد مسیر کشتی شوید"
         case 29: action = "از مسیر کشتی خارج شوید"
+        case 30: action = "وارد مسیر حمل‌ونقل عمومی شوید"
+        case 31: action = "وسیله یا خط حمل‌ونقل را عوض کنید"
+        case 32: action = "در همین وسیله بمانید"
+        case 33: action = "به مسیر اتصال حمل‌ونقل عمومی بروید"
+        case 34: action = "در مسیر اتصال، وسیله را عوض کنید"
+        case 35, 36: action = "به مقصد حمل‌ونقل عمومی رسیده‌اید"
+        case 37: action = "از سمت راست به مسیر اصلی ادغام شوید"
+        case 38: action = "از سمت چپ به مسیر اصلی ادغام شوید"
+        case 39: action = "وارد آسانسور شوید"
+        case 40: action = "از پله‌ها استفاده کنید"
+        case 41: action = "از پله‌برقی استفاده کنید"
+        case 42: action = "وارد ساختمان شوید"
+        case 43: action = "از ساختمان خارج شوید"
+        case 44: action = "به طبقه یا تراز دیگری بروید"
+        case 45: action = "وسیله نقلیه را پارک کنید"
         default: action = "به مسیر ادامه دهید"
         }
 
-        let street = streetName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !street.isEmpty, street.lowercased() != "unnamed road" else { return action }
-        return "\(action) و وارد \(street) شوید"
+        guard hasStreet, ![4, 5, 6, 28, 29, 30, 31, 32, 33, 34, 35, 36, 39, 40, 41, 42, 43, 44, 45].contains(type) else {
+            return action
+        }
+        return "(action) و وارد (street) شوید"
     }
 
     static func distance(_ meters: Double) -> String {
@@ -133,9 +181,9 @@ enum PersianInstructionFormatter {
             let value = kilometers < 10
                 ? String(format: "%.1f", kilometers)
                 : String(Int(kilometers.rounded()))
-            return "\(persianDigits(value)) کیلومتر"
+            return "(persianDigits(value)) کیلومتر"
         }
-        return "\(persianDigits(String(Int(safe.rounded())))) متر"
+        return "(persianDigits(String(Int(safe.rounded()))) ) متر"
     }
 
     static func duration(_ seconds: Double) -> String {
@@ -143,9 +191,9 @@ enum PersianInstructionFormatter {
         let hours = minutes / 60
         let remainder = minutes % 60
         if hours > 0 {
-            return "\(persianDigits(String(hours))) ساعت و \(persianDigits(String(remainder))) دقیقه"
+            return "(persianDigits(String(hours))) ساعت و (persianDigits(String(remainder))) دقیقه"
         }
-        return "\(persianDigits(String(minutes))) دقیقه"
+        return "(persianDigits(String(minutes))) دقیقه"
     }
 
     static func persianDigits(_ value: String) -> String {
@@ -156,5 +204,27 @@ enum PersianInstructionFormatter {
             }
             return character == "." ? "٫" : String(character)
         }.joined()
+    }
+}
+
+enum NavigationLocationQuality {
+    static func isFresh(
+        timestamp: Date,
+        now: Date = Date(),
+        maximumAge: TimeInterval = 20
+    ) -> Bool {
+        let age = now.timeIntervalSince(timestamp)
+        return age >= -2 && age <= maximumAge
+    }
+
+    static func isUsable(
+        horizontalAccuracy: CLLocationAccuracy,
+        timestamp: Date,
+        now: Date = Date(),
+        maximumAccuracy: CLLocationAccuracy = 65
+    ) -> Bool {
+        horizontalAccuracy >= 0 &&
+        horizontalAccuracy <= maximumAccuracy &&
+        isFresh(timestamp: timestamp, now: now)
     }
 }
