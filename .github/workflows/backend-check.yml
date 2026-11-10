@@ -53,6 +53,8 @@ jobs:
               spec = yaml.safe_load(stream)
           assert spec["openapi"] == "3.1.0"
           assert "/healthz" in spec["paths"]
+          assert "/api/v1/routes" in spec["paths"]
+          assert spec["paths"]["/api/v1/routes"]["post"]["x-implementation-status"] == "implemented"
           assert "/api/v1/me/places" in spec["paths"]
           print("OpenAPI contract parsed successfully.")
           PY
