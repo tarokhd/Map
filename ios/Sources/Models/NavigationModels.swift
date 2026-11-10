@@ -228,3 +228,50 @@ enum NavigationLocationQuality {
         isFresh(timestamp: timestamp, now: now)
     }
 }
+
+
+enum Polyline6Decoder {
+    static func decode(_ encoded: String) -> [RouteCoordinate] {
+        let bytes = Array(encoded.utf8)
+        var index = 0
+        var latitude = 0
+        var longitude = 0
+        var points: [RouteCoordinate] = []
+
+        func readDelta() -> Int? {
+            var result = 0
+            var shift = 0
+            var byte = 0
+
+            repeat {
+                guard index < bytes.count, shift <= 30 else { return nil }
+                byte = Int(bytes[index]) - 63
+                index += 1
+                guard byte >= 0 else { return nil }
+                result |= (byte & 0x1f) << shift
+                shift += 5
+            } while byte >= 0x20
+
+            return (result & 1) != 0 ? ~(result >> 1) : (result >> 1)
+        }
+
+        while index < bytes.count {
+            guard let latitudeDelta = readDelta(),
+                  let longitudeDelta = readDelta() else {
+                return []
+            }
+
+            latitude += latitudeDelta
+            longitude += longitudeDelta
+
+            let lat = Double(latitude) / 1_000_000
+            let lon = Double(longitude) / 1_000_000
+            guard (-90.0...90.0).contains(lat), (-180.0...180.0).contains(lon) else {
+                return []
+            }
+            points.append(RouteCoordinate(latitude: lat, longitude: lon))
+        }
+
+        return points
+    }
+}
