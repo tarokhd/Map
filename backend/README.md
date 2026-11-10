@@ -20,6 +20,7 @@ docker compose -f backend/compose.yml up --build
 - Health: http://localhost:8000/healthz
 - Database readiness: http://localhost:8000/readyz
 - Swagger UI: http://localhost:8000/docs
+- Route API (contract and implementation): POST http://localhost:8000/api/v1/routes
 
 Compose برای توسعه محلی است. پورت‌های API و دیتابیس فقط روی localhost bind شده‌اند و رمز پیش‌فرض صرفاً رمز توسعه است.
 
