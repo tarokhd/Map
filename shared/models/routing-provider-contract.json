@@ -10,7 +10,11 @@
     "valhalla": {
       "role": "baseline",
       "trafficAware": false,
-      "supportedModes": ["car", "motorcycle", "walking"],
+      "supportedModes": [
+        "car",
+        "motorcycle",
+        "walking"
+      ],
       "motorcycleFallback": "motor_scooter",
       "geometryEncoding": "polyline6",
       "clientMayCallDirectlyInPrototype": true
@@ -21,16 +25,19 @@
       "method": "GET",
       "authenticationHeader": "Api-Key",
       "trafficAware": true,
-      "supportedModes": ["car", "motorcycle"],
+      "supportedModes": [
+        "car",
+        "motorcycle"
+      ],
       "supportsAlternativeRoutes": true,
       "supportsWaypoints": true,
-      "maximumWaypoints": 3,
       "supportsTrafficZoneAvoidance": true,
       "supportsOddEvenZoneAvoidance": true,
       "geometryEncoding": "encoded-polyline",
       "geometryPrecision": "must-be-verified-with-provider-fixture",
       "requiresBackendProxy": true,
-      "apiKeyMayBeIncludedInClient": false
+      "apiKeyMayBeIncludedInClient": false,
+      "waypointsLimit": "not-specified-in-current-official-docs"
     }
   },
   "providerSelection": {
@@ -58,7 +65,12 @@
   "fallbackPolicy": {
     "trafficProviderUnavailable": "never-silently-label-a-non-traffic-route-as-traffic-aware",
     "fallbackMustBeExplicit": true,
-    "responseMustInclude": ["provider", "trafficAware", "fallbackUsed", "fallbackReason"]
+    "responseMustInclude": [
+      "provider",
+      "trafficAware",
+      "fallbackUsed",
+      "fallbackReason"
+    ]
   },
   "normalizedRouteOption": {
     "requiredFields": [
