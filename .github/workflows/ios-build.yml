@@ -50,6 +50,11 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
+      - name: Install iOS Simulator runtime
+        run: |
+          xcodebuild -downloadPlatform iOS
+          xcrun simctl list devices available
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
@@ -65,10 +70,15 @@ jobs:
 
       - name: Run iOS unit and UI tests
         run: |
+          SIMULATOR_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')"
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "No available iPhone simulator was found after installing the iOS runtime."
+            exit 1
+          fi
           xcodebuild \
             -project ios/IranNavigator.xcodeproj \
             -scheme IranNavigator \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
             -derivedDataPath "$RUNNER_TEMP/IranNavigatorTestDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/IranNavigatorTests.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
