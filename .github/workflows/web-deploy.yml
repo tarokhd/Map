@@ -2,11 +2,11 @@ name: Deploy Iran Navigator Web Preview
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "web/**"
-      - ".github/workflows/deploy-web.yml"
+      - "shared/**"
+      - ".github/workflows/web-deploy.yml"
   workflow_dispatch:
 
 permissions:
@@ -26,29 +26,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-
-      - name: Validate web entry point
+      - name: Validate web entry point and JavaScript
         run: |
           test -s web/index.html
           node - <<'NODE'
           const fs = require('fs');
           const html = fs.readFileSync('web/index.html', 'utf8');
-          const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
-          if (scripts.length !== 1) throw new Error('Expected one inline application script');
-          fs.writeFileSync('/tmp/iran-navigator-web.js', scripts[0][1]);
+          const start = html.indexOf('<script>');
+          const end = html.indexOf('</script>', start + 8);
+          if (start < 0 || end < 0) throw new Error('Inline application script not found');
+          fs.writeFileSync('/tmp/iran-navigator-web.js', html.slice(start + 8, end));
           NODE
           node --check /tmp/iran-navigator-web.js
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
-      - name: Upload GitHub Pages artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: web
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4

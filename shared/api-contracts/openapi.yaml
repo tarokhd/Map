@@ -1,0 +1,196 @@
+openapi: 3.1.0
+info:
+  title: Iran Navigator Shared API
+  version: 0.1.0
+  description: >-
+    Contract-first API shared by Iran Navigator Android and Web.
+    User-data endpoints are planned and are not implemented by the current backend scaffold yet.
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; replace after backend deployment.
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      security: []
+      summary: Liveness check
+      responses:
+        "200":
+          description: API process is alive
+  /readyz:
+    get:
+      security: []
+      summary: Database readiness check
+      responses:
+        "200":
+          description: Database is reachable
+        "503":
+          description: Database is unavailable
+  /api/v1/me/places:
+    get:
+      summary: List the authenticated user's saved places
+      x-implementation-status: planned
+      responses:
+        "200":
+          description: Saved places
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavedPlace"
+        "401":
+          description: Authentication required
+    post:
+      summary: Save a place for the authenticated user
+      x-implementation-status: planned
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSavedPlace"
+      responses:
+        "201":
+          description: Place saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedPlace"
+        "401":
+          description: Authentication required
+  /api/v1/me/places/{placeId}:
+    delete:
+      summary: Delete one of the authenticated user's saved places
+      x-implementation-status: planned
+      parameters:
+        - name: placeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Place deleted
+        "401":
+          description: Authentication required
+        "404":
+          description: Place not found
+  /api/v1/me/routes:
+    get:
+      summary: List the authenticated user's route history
+      x-implementation-status: planned
+      responses:
+        "200":
+          description: Route history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RouteHistory"
+        "401":
+          description: Authentication required
+    post:
+      summary: Save a completed route
+      x-implementation-status: planned
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRouteHistory"
+      responses:
+        "201":
+          description: Route saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteHistory"
+        "401":
+          description: Authentication required
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Coordinates:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+    SavedPlace:
+      type: object
+      required: [id, title, location, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        note:
+          type: [string, "null"]
+        location:
+          $ref: "#/components/schemas/Coordinates"
+        created_at:
+          type: string
+          format: date-time
+    CreateSavedPlace:
+      type: object
+      required: [title, location]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        note:
+          type: [string, "null"]
+        location:
+          $ref: "#/components/schemas/Coordinates"
+    RouteHistory:
+      type: object
+      required: [id, origin, destination, travel_mode, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        origin:
+          $ref: "#/components/schemas/Coordinates"
+        destination:
+          $ref: "#/components/schemas/Coordinates"
+        travel_mode:
+          type: string
+          enum: [car, motorcycle, walking]
+        distance_m:
+          type: [number, "null"]
+        duration_s:
+          type: [number, "null"]
+        created_at:
+          type: string
+          format: date-time
+    CreateRouteHistory:
+      type: object
+      required: [origin, destination, travel_mode]
+      properties:
+        origin:
+          $ref: "#/components/schemas/Coordinates"
+        destination:
+          $ref: "#/components/schemas/Coordinates"
+        travel_mode:
+          type: string
+          enum: [car, motorcycle, walking]
+        distance_m:
+          type: [number, "null"]
+        duration_s:
+          type: [number, "null"]

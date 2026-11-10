@@ -1,0 +1,54 @@
+name: Validate Iran Navigator Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "shared/**"
+      - ".github/workflows/backend-check.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "shared/**"
+      - ".github/workflows/backend-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt PyYAML
+
+      - name: Compile Python source
+        run: python -m compileall -q backend/app
+
+      - name: Validate FastAPI app import
+        working-directory: backend
+        run: python -c "from app.main import app; assert app.title == 'Iran Navigator API'"
+
+      - name: Validate OpenAPI contract syntax
+        run: |
+          python - <<'PY'
+          import yaml
+          with open("shared/api-contracts/openapi.yaml", encoding="utf-8") as stream:
+              spec = yaml.safe_load(stream)
+          assert spec["openapi"] == "3.1.0"
+          assert "/healthz" in spec["paths"]
+          assert "/api/v1/me/places" in spec["paths"]
+          print("OpenAPI contract parsed successfully.")
+          PY
