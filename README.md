@@ -11,7 +11,7 @@ web/                      پیش‌نمایش وب (MapLibre GL JS)
 backend/                  API و پایگاه داده مشترک (FastAPI + PostGIS)
 shared/
   api-contracts/          قرارداد رسمی API بین پلتفرم‌ها
-  models/                 مدل‌ها و قرارداد ناوبری مشترک
+  models/                 قرارداد ناوبری و adapterهای ارائه‌دهنده مسیر
 docs/                     معماری و راهنمای توسعه
 scripts/                  بررسی همسانی و تست سرویس‌های نقشه
 .github/workflows/        CI/CD مستقل برای هر بخش
@@ -70,6 +70,7 @@ docker compose -f backend/compose.yml up --build
 - iOS: تست‌های Swift و UI روی شبیه‌ساز، همراه با موقعیت شبیه‌سازی‌شده تهران
 - Web: انتشار مستقل GitHub Pages
 - Platform parity: بررسی خودکار حالت‌های سفر، دستورهای گردش، داده ساختمان سه‌بعدی و قالب polyline6 در هر سه کلاینت
+- Browser smoke: اجرای Chromium واقعی، بررسی رندر canvas نقشه و کنترل‌های 2D/3D
 - Navigation smoke: بررسی زنده سرویس‌های OpenFreeMap، Photon و Valhalla
 
 برای اجرای دستی تست سرویس‌های عمومی:
