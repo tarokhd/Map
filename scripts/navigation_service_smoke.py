@@ -101,7 +101,7 @@ def check_styles():
 
         tile_templates = tilejson.get("tiles", [])
         if tile_templates:
-            zoom = min(14, int(tilejson.get("maxzoom", 14)))
+            zoom = min(15, int(tilejson.get("maxzoom", 15)))
             tile_x = int((TEHRAN_START["lon"] + 180) / 360 * (2 ** zoom))
             latitude_radians = math.radians(TEHRAN_START["lat"])
             tile_y = int((1 - math.asinh(math.tan(latitude_radians)) / math.pi) / 2 * (2 ** zoom))
