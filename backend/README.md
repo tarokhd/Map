@@ -22,6 +22,8 @@ docker compose -f backend/compose.yml up --build
 - Swagger UI: http://localhost:8000/docs
 - Route API (contract and implementation): POST http://localhost:8000/api/v1/routes
 
+بدون NESHAN_API_KEY، درخواست traffic_preference=live برای خودرو/موتور پاسخ 503 می‌گیرد؛ می‌توانید موقتاً allow_non_traffic_fallback=true را بفرستید تا مسیر Valhalla با برچسب fallback_used=true و traffic_aware=false برگردد. فایل .env در Git نادیده گرفته می‌شود؛ کلید واقعی را commit نکنید.
+
 Compose برای توسعه محلی است. پورت‌های API و دیتابیس فقط روی localhost bind شده‌اند و رمز پیش‌فرض صرفاً رمز توسعه است.
 
 ## راهبرد مسیریابی
