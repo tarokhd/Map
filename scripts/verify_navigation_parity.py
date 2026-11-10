@@ -63,15 +63,11 @@ require("iOS", "routing", '"shape_format": "polyline6"', "polyline6 route reques
 require("iOS", "location", "NavigationLocationQuality.isUsable", "fresh and accurate GPS validation")
 require("iOS", "view", "distanceAlongRoute", "distance-along-route guidance progress")
 
-require("Web", "app", '<script type="module">', "ES module application entry point")
-require("Web", "app", 'import("./vendor/maplibre-gl.mjs")', "same-origin MapLibre GL JS v6 module")
-require("Web", "app", 'href="./vendor/maplibre-gl.css"', "same-origin MapLibre CSS")
-require("Web", "app", "typeof maplibregl.Map", "MapLibre ESM namespace validation")
-require("Web", "app", "فایل محلی کتابخانه نقشه بارگذاری نشد", "visible local asset import error")
-if 'unpkg.com/maplibre-gl' in sources["Web"]["app"]:
-    errors.append("Web: MapLibre must be hosted on the same origin, not loaded from unpkg")
-if 'maplibre-gl.js' in sources["Web"]["app"] or 'window.maplibregl' in sources["Web"]["app"]:
-    errors.append("Web: legacy UMD script/global reference must not be used with MapLibre GL JS v6")
+require("Web", "app", 'src="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js"', "restored MapLibre GL JS UMD script")
+require("Web", "app", 'href="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css"', "restored MapLibre CSS")
+require("Web", "app", "const maplibregl = window.maplibregl", "MapLibre UMD global namespace")
+if 'type="module"' in sources["Web"]["app"] or 'await import("./vendor/maplibre-gl.mjs")' in sources["Web"]["app"]:
+    errors.append("Web: unexpected local ES module loader; stable UMD loader should be used")
 
 require("Web", "app", 'source: "openfreemap"', "vector tile source")
 require("Web", "app", '"source-layer": "building"', "3D building source-layer")
