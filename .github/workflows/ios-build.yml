@@ -42,7 +42,7 @@ jobs:
             -project ios/IranNavigator.xcodeproj \
             -scheme IranNavigator
 
-      - name: Prepare iPhone simulator and simulated GPS
+      - name: Select iPhone simulator
         run: |
           SIMULATOR_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')"
           if [ -z "$SIMULATOR_ID" ]; then
@@ -50,15 +50,6 @@ jobs:
             exit 1
           fi
           echo "IOS_SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
-          xcrun simctl boot "$SIMULATOR_ID" || true
-          for attempt in $(seq 1 30); do
-            if xcrun simctl list devices available | grep "$SIMULATOR_ID" | grep -q "Booted"; then
-              break
-            fi
-            sleep 2
-          done
-          xcrun simctl privacy "$SIMULATOR_ID" grant location com.irannavigator.ios || true
-          xcrun simctl location "$SIMULATOR_ID" set 35.7006,51.4050 || true
 
       - name: Run iOS unit and UI tests
         run: |
