@@ -16,13 +16,29 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: ios-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  cancel-stale-ios-runs:
+    name: Cancel superseded iOS builds
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel older queued or stuck iOS workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-build.yml --limit 100 --json databaseId,status \
+            --jq ".[] | select(.databaseId != $GITHUB_RUN_ID and (.status == \"in_progress\" or .status == \"queued\")) | .databaseId" \
+            | while read -r run_id; do
+                [ -z "$run_id" ] || gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
+              done
+
   build-ios-simulator:
+    needs: cancel-stale-ios-runs
     name: Test and build iOS Simulator app
     runs-on: macos-15
     timeout-minutes: 75
