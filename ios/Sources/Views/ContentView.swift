@@ -56,6 +56,7 @@ struct ContentView: View {
                 destination: destination,
                 routePoints: route?.points ?? [],
                 userCoordinate: locationService.location.map(RouteCoordinate.init(location:)),
+                userAccuracy: locationService.location?.horizontalAccuracy,
                 userHeading: locationService.location.flatMap {
                     $0.course >= 0 && $0.speed > 1.5 ? $0.course : nil
                 },
@@ -172,13 +173,20 @@ struct ContentView: View {
                             .foregroundStyle(secondaryText)
                     }
                     Spacer()
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(speechService.isPersianVoiceAvailable ? Color.green : Color.orange)
-                            .frame(width: 8, height: 8)
-                        Text(speechService.isPersianVoiceAvailable ? "صدای فارسی" : "بدون صدای فارسی")
-                            .font(.caption)
-                            .foregroundStyle(secondaryText)
+                    VStack(alignment: .trailing, spacing: 5) {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(speechService.isPersianVoiceAvailable ? Color.green : Color.orange)
+                                .frame(width: 8, height: 8)
+                            Text(speechService.isPersianVoiceAvailable ? "صدای فارسی" : "بدون صدای فارسی")
+                                .font(.caption)
+                                .foregroundStyle(secondaryText)
+                        }
+                        if let location = locationService.location {
+                            Text("دقت GPS ±\(PersianInstructionFormatter.distance(location.horizontalAccuracy))")
+                                .font(.caption2)
+                                .foregroundStyle(secondaryText)
+                        }
                     }
                     .accessibilityElement(children: .combine)
                 }
