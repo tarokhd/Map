@@ -28,34 +28,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Vendor MapLibre assets for same-origin hosting
-        run: |
-          mkdir -p "$RUNNER_TEMP/maplibre-package" web/vendor
-          npm pack maplibre-gl@6.17.0 --pack-destination "$RUNNER_TEMP/maplibre-package"
-          tar -xzf "$RUNNER_TEMP/maplibre-package/maplibre-gl-6.17.0.tgz" -C "$RUNNER_TEMP/maplibre-package"
-          cp "$RUNNER_TEMP/maplibre-package/package/dist/maplibre-gl.mjs" web/vendor/
-          cp "$RUNNER_TEMP/maplibre-package/package/dist/maplibre-gl-worker.mjs" web/vendor/
-          cp "$RUNNER_TEMP/maplibre-package/package/dist/maplibre-gl.css" web/vendor/
-          cp "$RUNNER_TEMP/maplibre-package/package/LICENSE.txt" web/vendor/LICENSE.txt
-          test -s web/vendor/maplibre-gl.mjs
-          test -s web/vendor/maplibre-gl-worker.mjs
-          test -s web/vendor/maplibre-gl.css
-
-      - name: Validate web entry point and JavaScript
+      - name: Validate restored MapLibre UMD assets and app script
         run: |
           test -s web/index.html
-          test -s web/vendor/maplibre-gl.mjs
-          test -s web/vendor/maplibre-gl-worker.mjs
-          test -s web/vendor/maplibre-gl.css
-          grep -q './vendor/maplibre-gl.mjs' web/index.html
-          grep -q './vendor/maplibre-gl.css' web/index.html
+          grep -q 'https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js' web/index.html
+          grep -q 'https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css' web/index.html
+          curl -fLsS --retry 2 --retry-delay 2 -o /dev/null https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js
+          curl -fLsS --retry 2 --retry-delay 2 -o /dev/null https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css
           node - <<'NODE'
           const fs = require('fs');
           const html = fs.readFileSync('web/index.html', 'utf8');
-          const marker = '<script type="module">';
-          const start = html.indexOf(marker);
+          const external = '<script src="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js"></script>';
+          const externalIndex = html.indexOf(external);
+          if (externalIndex < 0) throw new Error('Restored MapLibre UMD script tag not found');
+          const marker = '<script>';
+          const start = html.indexOf(marker, externalIndex + external.length);
           const end = html.indexOf('</script>', start + marker.length);
-          if (start < 0 || end < 0) throw new Error('MapLibre ES module application script not found');
+          if (start < 0 || end < 0) throw new Error('Inline Iran Navigator app script not found');
           fs.writeFileSync('/tmp/iran-navigator-web.js', html.slice(start + marker.length, end));
           NODE
           node --check /tmp/iran-navigator-web.js
