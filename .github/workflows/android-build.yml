@@ -48,6 +48,10 @@ jobs:
           test -f app/src/main/java/com/irannavigator/demo/RoutingEngine.kt
           test -f app/src/main/java/com/irannavigator/demo/PersianVoice.kt
 
+      - name: Run Android unit tests
+        working-directory: android
+        run: gradle --no-daemon :app:testDebugUnitTest --stacktrace
+
       - name: Build APK
         working-directory: android
         run: gradle --no-daemon :app:assembleDebug --stacktrace
