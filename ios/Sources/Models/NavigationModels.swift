@@ -117,7 +117,7 @@ enum PersianInstructionFormatter {
         let hasStreet = !street.isEmpty && street.lowercased() != "unnamed road"
 
         if type == 7, hasStreet {
-            return "مسیر به \\(street) تبدیل می‌شود"
+            return "مسیر به \(street) تبدیل می‌شود"
         }
 
         let action: String
@@ -171,7 +171,7 @@ enum PersianInstructionFormatter {
         guard hasStreet, ![4, 5, 6, 28, 29, 30, 31, 32, 33, 34, 35, 36, 39, 40, 41, 42, 43, 44, 45].contains(type) else {
             return action
         }
-        return "\\(action) و وارد \\(street) شوید"
+        return "\(action) و وارد \(street) شوید"
     }
 
     static func distance(_ meters: Double) -> String {
@@ -181,9 +181,9 @@ enum PersianInstructionFormatter {
             let value = kilometers < 10
                 ? String(format: "%.1f", kilometers)
                 : String(Int(kilometers.rounded()))
-            return "\\(persianDigits(value)) کیلومتر"
+            return "\(persianDigits(value)) کیلومتر"
         }
-        return "\\(persianDigits(String(Int(safe.rounded())))) متر"
+        return "\(persianDigits(String(Int(safe.rounded())))) متر"
     }
 
     static func duration(_ seconds: Double) -> String {
@@ -191,9 +191,9 @@ enum PersianInstructionFormatter {
         let hours = minutes / 60
         let remainder = minutes % 60
         if hours > 0 {
-            return "\\(persianDigits(String(hours))) ساعت و \\(persianDigits(String(remainder))) دقیقه"
+            return "\(persianDigits(String(hours))) ساعت و \(persianDigits(String(remainder))) دقیقه"
         }
-        return "\\(persianDigits(String(minutes))) دقیقه"
+        return "\(persianDigits(String(minutes))) دقیقه"
     }
 
     static func persianDigits(_ value: String) -> String {
