@@ -37,6 +37,10 @@ jobs:
       - name: Compile Python source
         run: python -m compileall -q backend/app
 
+      - name: Run routing provider unit tests
+        working-directory: backend
+        run: python -m unittest discover -s tests -v
+
       - name: Validate FastAPI app import
         working-directory: backend
         run: python -c "from app.main import app; assert app.title == 'Iran Navigator API'"
