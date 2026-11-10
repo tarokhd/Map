@@ -19,9 +19,9 @@ permissions:
 
 jobs:
   build-ios-simulator:
-    name: Build iOS Simulator app
+    name: Test and build iOS Simulator app
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,11 +38,37 @@ jobs:
 
       - name: Resolve Swift packages
         run: |
-          xcodebuild -resolvePackageDependencies             -project ios/IranNavigator.xcodeproj             -scheme IranNavigator
+          xcodebuild -resolvePackageDependencies \
+            -project ios/IranNavigator.xcodeproj \
+            -scheme IranNavigator
 
-      - name: Build for iOS Simulator
+      - name: Run iOS unit and UI tests
         run: |
-          xcodebuild             -project ios/IranNavigator.xcodeproj             -scheme IranNavigator             -sdk iphonesimulator             -configuration Debug             -destination 'generic/platform=iOS Simulator'             -derivedDataPath "$RUNNER_TEMP/IranNavigatorDerivedData"             CODE_SIGNING_ALLOWED=NO             build
+          SIMULATOR_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')"
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "No available iPhone simulator was found."
+            exit 1
+          fi
+          xcodebuild \
+            -project ios/IranNavigator.xcodeproj \
+            -scheme IranNavigator \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath "$RUNNER_TEMP/IranNavigatorTestDerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/IranNavigatorTests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+
+      - name: Build app for iOS Simulator
+        run: |
+          xcodebuild \
+            -project ios/IranNavigator.xcodeproj \
+            -scheme IranNavigator \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/IranNavigatorDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
 
       - name: Package simulator app
         run: |
