@@ -153,6 +153,22 @@ class RoutingProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(option.overview_geometry.encoding, "polyline6")
         self.assertEqual(option.legs[0].steps[0].instruction, "به راست بپیچید و وارد ولیعصر شوید")
 
+    async def test_live_walking_route_is_rejected_without_fallback_consent(self):
+        service = RoutingService(
+            neshan_provider=NeshanTrafficProvider("test-secret"),
+            valhalla_provider=ValhallaRoutingProvider("https://valhalla.test/route"),
+        )
+        request = RouteRequest(
+            origin={"latitude": 35.70, "longitude": 51.40},
+            destination={"latitude": 35.71, "longitude": 51.39},
+            travel_mode="walking",
+            traffic_preference="live",
+            allow_non_traffic_fallback=False,
+        )
+        async with httpx.AsyncClient() as client:
+            with self.assertRaises(ProviderNotConfigured):
+                await service.calculate(request, client)
+
     async def test_live_walking_route_requires_explicit_non_traffic_fallback(self):
         shape = encode_polyline(
             [(35.7000, 51.4000), (35.7100, 51.3900)],
