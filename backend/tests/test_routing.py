@@ -64,7 +64,10 @@ class RoutingProviderTests(unittest.IsolatedAsyncioTestCase):
             request = RouteRequest(
                 origin={"latitude": 35.70, "longitude": 51.40},
                 destination={"latitude": 35.71, "longitude": 51.39},
-                waypoints=[{"latitude": 35.705, "longitude": 51.395}],
+                waypoints=[
+                    {"latitude": 35.705, "longitude": 51.395},
+                    {"latitude": 35.706, "longitude": 51.394},
+                ],
                 travel_mode="car",
                 traffic_preference="live",
                 alternatives=True,
