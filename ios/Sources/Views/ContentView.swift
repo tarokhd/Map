@@ -670,6 +670,9 @@ struct ContentView: View {
             return
         }
 
+        if isNavigating {
+            stopNavigation()
+        }
         isCalculatingRoute = true
         statusMessage = "در حال محاسبه مسیر واقعی خیابان‌ها..."
         do {
