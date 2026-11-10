@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: >-
     Contract-first API shared by Iran Navigator Android and Web.
-    User-data endpoints are planned and are not implemented by the current backend scaffold yet.
+    Traffic-aware routing is implemented behind a server-side provider adapter; user-data endpoints remain planned and are not implemented yet.
 servers:
   - url: https://api.example.invalid
     description: Placeholder; replace after backend deployment.
