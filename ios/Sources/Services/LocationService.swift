@@ -2,7 +2,6 @@ import Combine
 import CoreLocation
 import Foundation
 
-@MainActor
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published private(set) var location: CLLocation?
     @Published private(set) var authorizationStatus: CLAuthorizationStatus
