@@ -49,6 +49,26 @@ const { chromium } = require("playwright");
       throw new Error("Browser JavaScript errors: " + pageErrors.join(" | "));
     }
 
+    const diagnostics = await page.evaluate(() => {
+      const resources = performance.getEntriesByType("resource")
+        .filter(entry => /unpkg.com|openfreemap.org/.test(entry.name))
+        .map(entry => ({
+          host: new URL(entry.name).host,
+          durationMs: Math.round(entry.duration),
+          transferBytes: entry.transferSize || 0
+        }))
+        .sort((a, b) => b.durationMs - a.durationMs)
+        .slice(0, 8);
+      const canvas = document.querySelector("#map canvas");
+      return {
+        mapReadyMs: Math.round(performance.now()),
+        canvasWidth: canvas ? canvas.width : 0,
+        canvasHeight: canvas ? canvas.height : 0,
+        webgl2: !!(canvas && canvas.getContext("webgl2")),
+        resources
+      };
+    });
+
     await page.screenshot({
       path: "iran-navigator-web-smoke.png",
       fullPage: false
@@ -60,6 +80,9 @@ const { chromium } = require("playwright");
     console.log(
       "Map canvas: " + Math.round(bounds.width) + "x" + Math.round(bounds.height)
     );
+    console.log("Map ready after navigation start: " + diagnostics.mapReadyMs + " ms");
+    console.log("WebGL2 available: " + diagnostics.webgl2);
+    console.log("Slowest map resources: " + JSON.stringify(diagnostics.resources));
   } finally {
     await browser.close();
   }
