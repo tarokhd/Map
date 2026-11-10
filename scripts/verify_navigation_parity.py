@@ -63,8 +63,8 @@ require("iOS", "routing", '"shape_format": "polyline6"', "polyline6 route reques
 require("iOS", "location", "NavigationLocationQuality.isUsable", "fresh and accurate GPS validation")
 require("iOS", "view", "distanceAlongRoute", "distance-along-route guidance progress")
 
-require("Web", "app", 'src="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.js"', "restored MapLibre GL JS UMD script")
-require("Web", "app", 'href="https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css"', "restored MapLibre CSS")
+require("Web", "app", 'src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"', "restored MapLibre GL JS UMD script")
+require("Web", "app", 'href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css"', "restored MapLibre CSS")
 require("Web", "app", "const maplibregl = window.maplibregl", "MapLibre UMD global namespace")
 if 'type="module"' in sources["Web"]["app"] or 'await import("./vendor/maplibre-gl.mjs")' in sources["Web"]["app"]:
     errors.append("Web: unexpected local ES module loader; stable UMD loader should be used")
