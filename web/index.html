@@ -3,240 +3,230 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1524">
+  <meta name="theme-color" content="#252629">
   <meta name="description" content="Iran Navigator - نقشه سه‌بعدی و مسیریابی آزمایشی ایران">
   <title>Iran Navigator | نقشه و مسیریاب</title>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
   <style>
     :root {
       color-scheme: dark;
-      --bg: #0b1524;
-      --panel: rgba(13, 27, 45, .94);
-      --panel-2: rgba(22, 42, 63, .96);
-      --line: rgba(174, 205, 226, .15);
-      --text: #f4f8fc;
-      --muted: #9eb2c7;
-      --accent: #28d0c4;
-      --accent-2: #0c9fa4;
-      --success: #20bf86;
-      --danger: #ef6268;
-      --shadow: 0 18px 55px rgba(0,0,0,.30);
+      --bg: #34383c;
+      --panel: rgba(36, 37, 40, .96);
+      --panel-2: #303135;
+      --surface: rgba(255, 255, 255, .055);
+      --surface-hover: rgba(255, 255, 255, .10);
+      --line: rgba(255, 255, 255, .10);
+      --text: #f1f0ed;
+      --muted: #b4b5b7;
+      --accent: #e0e0dc;
+      --accent-2: #c6c6c2;
+      --action: #e8e7e2;
+      --action-text: #252629;
+      --selected: #505156;
+      --success: #afc4b1;
+      --danger: #dd9694;
+      --shadow: 0 12px 35px rgba(0, 0, 0, .16), 0 2px 7px rgba(0, 0, 0, .10);
     }
     * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font-family: Tahoma, "Segoe UI", sans-serif; }
+    html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif; -webkit-font-smoothing: antialiased; }
     button, input { font: inherit; }
-    button { cursor: pointer; }
-    #map { position: fixed; inset: 0; background: #14283c; }
-    .maplibregl-ctrl-attrib { font-family: Tahoma, sans-serif; direction: ltr; }
-    .maplibregl-ctrl-group { border-radius: 12px !important; overflow: hidden; box-shadow: var(--shadow) !important; }
+    button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    button, input { transition: background .18s ease, border-color .18s ease, opacity .18s ease; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+    button:disabled { cursor: default; opacity: .42; }
+    button[hidden], [hidden] { display: none !important; }
+    svg { display: block; }
+    #map { position: fixed; inset: 0; background: var(--bg); direction: ltr; }
+    input, .result-item, .maneuver-text { line-height: 1.8; unicode-bidi: plaintext; }
+    .brand-name, .eyebrow, #threeDButton, #compassButton { direction: ltr; unicode-bidi: isolate; }
+    .bilingual { unicode-bidi: plaintext; }
     .topbar {
-      position: fixed; z-index: 20; top: 16px; left: 18px; right: 18px; height: 68px;
-      display: flex; align-items: center; gap: 14px; padding: 9px 13px;
+      position: fixed; z-index: 20; top: 18px; left: 24px; right: 24px; min-height: 64px;
+      display: flex; align-items: center; gap: 24px; padding: 10px 13px;
       background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
-      box-shadow: var(--shadow); backdrop-filter: blur(18px);
+      box-shadow: var(--shadow); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
     }
-    .brand { display: flex; align-items: center; gap: 10px; min-width: 218px; }
-    .brand-mark {
-      width: 43px; height: 43px; border-radius: 14px; display: grid; place-items: center;
-      color: #061b25; background: linear-gradient(145deg, #5df0d8, #13a8bd);
-      box-shadow: 0 7px 22px rgba(40,208,196,.25);
-    }
-    .brand-mark svg { width: 25px; height: 25px; }
-    .brand-name { font-size: 15px; font-weight: 900; letter-spacing: .7px; }
-    .brand-sub { color: var(--muted); font-size: 10px; margin-top: 4px; }
-    .search-wrap { flex: 1; max-width: 590px; position: relative; margin: 0 auto; }
-    .searchbox {
-      display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px;
-      background: rgba(255,255,255,.055); border: 1px solid var(--line); border-radius: 14px;
-    }
-    .searchbox svg { width: 19px; height: 19px; color: var(--accent); flex: none; }
-    .searchbox input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text); background: transparent; font-size: 13px; }
-    .searchbox input::placeholder { color: #91a7bc; }
-    .search-submit { border: 0; border-radius: 10px; padding: 9px 15px; background: var(--accent); color: #06212a; font-weight: 900; font-size: 12px; white-space: nowrap; }
-    .top-actions { display: flex; align-items: center; gap: 8px; }
-    .icon-btn, .small-btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-      height: 40px; min-width: 40px; padding: 0 11px; color: var(--text);
-      background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 12px;
-      transition: .18s ease;
-    }
-    .icon-btn:hover, .small-btn:hover { background: rgba(40,208,196,.13); border-color: rgba(40,208,196,.4); transform: translateY(-1px); }
+    .brand { display: flex; align-items: center; gap: 11px; min-width: 210px; }
+    .brand-mark { width: 39px; height: 39px; border-radius: 50%; display: grid; place-items: center; color: var(--text); background: var(--surface); border: 1px solid var(--line); }
+    .brand-mark svg { width: 22px; height: 22px; }
+    .brand-name { font-size: 14px; font-weight: 600; letter-spacing: .1px; }
+    .brand-sub { color: var(--muted); font-size: 10px; margin-top: 5px; }
+    .search-wrap { flex: 1; min-width: 0; max-width: 520px; position: relative; margin: 0 auto; }
+    .searchbox { display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 11px; background: var(--surface); border: 1px solid transparent; border-radius: 12px; }
+    .searchbox:focus-within { border-color: var(--muted); }
+    .searchbox svg { width: 17px; height: 17px; color: var(--muted); flex: none; }
+    .searchbox input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text); background: transparent; font-size: 12px; }
+    input::placeholder { color: var(--muted); opacity: .9; }
+    .search-submit { flex: none; border: 0; border-radius: 8px; padding: 6px 10px; background: var(--surface-hover); color: var(--text); font-weight: 500; font-size: 11px; white-space: nowrap; }
+    .search-submit:hover { background: var(--selected); }
+    .top-actions { display: flex; align-items: center; gap: 14px; }
+    .icon-btn, .small-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; min-width: 38px; padding: 0 11px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 11px; font-size: 12px; }
+    .icon-btn:hover, .small-btn:hover { background: var(--surface-hover); }
     .icon-btn svg { width: 18px; height: 18px; }
-    .top-status { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; white-space: nowrap; }
-    .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 5px rgba(32,191,134,.12); }
-    .route-panel {
-      position: fixed; z-index: 15; top: 101px; right: 18px; bottom: 18px; width: 370px;
-      display: flex; flex-direction: column; overflow: hidden;
-      background: var(--panel); border: 1px solid var(--line); border-radius: 22px;
-      box-shadow: var(--shadow); backdrop-filter: blur(18px);
-    }
-    .panel-head { padding: 18px 18px 13px; border-bottom: 1px solid var(--line); }
-    .eyebrow { color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: 1.1px; }
-    .panel-title { font-size: 18px; font-weight: 900; margin-top: 6px; }
-    .panel-desc { color: var(--muted); font-size: 11px; line-height: 1.8; margin-top: 6px; }
-    .panel-body { overflow-y: auto; padding: 14px; scrollbar-width: thin; scrollbar-color: #34516a transparent; }
-    .section-label { color: var(--muted); font-size: 11px; font-weight: 700; margin: 2px 2px 9px; }
-    .mode-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 16px; }
-    .mode-btn {
-      border: 1px solid var(--line); background: rgba(255,255,255,.045); color: var(--muted);
-      border-radius: 12px; padding: 10px 5px; font-size: 11px; font-weight: 800; transition: .18s;
-    }
-    .mode-btn .mode-icon { display: block; font-size: 18px; margin-bottom: 5px; }
-    .mode-btn.active { color: #06232b; background: linear-gradient(135deg, #55e4d3, #16b6b7); border-color: transparent; box-shadow: 0 7px 20px rgba(40,208,196,.18); }
-    .route-inputs { display: grid; gap: 9px; margin-bottom: 12px; }
-    .route-input-row { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.04); }
-    .route-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 4px rgba(32,191,134,.12); }
-    .route-dot.dest { background: var(--danger); box-shadow: 0 0 0 4px rgba(239,98,104,.12); }
+    .top-status { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .pulse { width: 5px; height: 5px; border-radius: 50%; background: var(--success); }
+    .route-panel { position: fixed; z-index: 15; top: 104px; right: 24px; width: 350px; max-height: calc(100dvh - 128px); display: flex; flex-direction: column; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+    .panel-head { padding: 23px 21px 18px; }
+    .eyebrow { color: var(--muted); font-size: 9px; font-weight: 500; letter-spacing: 1.4px; }
+    .panel-title { font-size: 23px; font-weight: 600; margin-top: 9px; letter-spacing: -.5px; }
+    .panel-desc { color: var(--muted); font-size: 11px; line-height: 1.9; margin-top: 8px; }
+    .panel-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 17px 15px; scrollbar-width: thin; scrollbar-color: var(--selected) transparent; }
+    .section-label { color: var(--muted); font-size: 10px; font-weight: 500; margin: 5px 3px 9px; }
+    .mode-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 4px; margin-bottom: 19px; background: var(--surface); border-radius: 12px; }
+    .mode-btn { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: 9px; padding: 10px 5px; font-size: 11px; font-weight: 500; }
+    .mode-btn:hover { color: var(--text); }
+    .mode-btn .mode-icon { display: block; flex: none; }
+    .mode-icon svg { width: 18px; height: 18px; }
+    .mode-btn.active { color: var(--text); background: var(--selected); border-color: var(--line); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+    .route-inputs { display: grid; gap: 0; margin-bottom: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
+    .route-input-row { display: flex; align-items: center; gap: 10px; min-height: 49px; padding: 8px 11px; }
+    .route-input-row + .route-input-row { border-top: 1px solid var(--line); }
+    .route-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; border: 2px solid var(--muted); }
+    .route-dot.dest { border: 0; background: var(--text); border-radius: 2px; }
     .route-input-row input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text); background: transparent; font-size: 12px; }
-    .route-input-row input::placeholder { color: #8da4ba; }
-    .pick-btn { border: 0; background: transparent; color: var(--accent); font-size: 10px; font-weight: 800; white-space: nowrap; }
-    .route-tools { display: flex; gap: 7px; margin-bottom: 16px; }
-    .tool-btn { flex: 1; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.045); color: var(--muted); padding: 9px 6px; font-size: 10px; font-weight: 700; }
-    .tool-btn.active { border-color: rgba(40,208,196,.5); color: var(--accent); background: rgba(40,208,196,.09); }
-    .primary-btn {
-      width: 100%; height: 47px; border: 0; border-radius: 13px; color: #05222a;
-      background: linear-gradient(115deg, #62edda, #18b9bd); font-size: 13px; font-weight: 900;
-      box-shadow: 0 9px 25px rgba(40,208,196,.18); transition: .2s;
-    }
-    .primary-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
-    .primary-btn:disabled { opacity: .5; cursor: wait; transform: none; }
-    .secondary-btn { width: 100%; height: 42px; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); background: rgba(255,255,255,.055); font-size: 11px; font-weight: 800; }
-    .summary { display: none; grid-template-columns: repeat(3,1fr); gap: 7px; margin-top: 14px; }
+    .pick-btn { flex: none; border: 0; background: transparent; color: var(--muted); font-size: 10px; font-weight: 500; white-space: nowrap; padding: 6px 0; }
+    .pick-btn:hover, .pick-btn.active { color: var(--text); }
+    .route-tools { display: flex; gap: 5px; margin-bottom: 17px; }
+    .tool-btn { flex: 1; min-width: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); padding: 9px 4px; font-size: 10px; font-weight: 400; line-height: 1.6; }
+    .tool-btn:hover, .tool-btn.active { color: var(--text); background: var(--surface); }
+    .primary-btn { width: 100%; min-height: 45px; padding: 8px 14px; border: 0; border-radius: 12px; color: var(--action-text); background: var(--action); font-size: 12px; font-weight: 600; }
+    .primary-btn:hover { opacity: .9; }
+    .secondary-btn { width: 100%; min-height: 42px; padding: 8px 14px; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); background: transparent; font-size: 11px; font-weight: 500; }
+    .secondary-btn:not(:disabled):hover { background: var(--surface-hover); }
+    .summary { display: none; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 17px; }
     .summary.visible { display: grid; }
-    .metric { background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 12px; padding: 10px 7px; text-align: center; }
-    .metric strong { display: block; color: var(--text); font-size: 14px; }
+    .metric { border-inline-end: 1px solid var(--line); padding: 5px; text-align: center; }
+    .metric:last-child { border: 0; }
+    .metric strong { display: block; color: var(--text); font-size: 15px; font-weight: 600; }
     .metric span { display: block; color: var(--muted); font-size: 9px; margin-top: 5px; }
-    .status-line { min-height: 30px; color: var(--muted); font-size: 10px; line-height: 1.8; padding: 9px 2px 3px; }
-    .status-line.error { color: #ff9296; }
-    .status-line.good { color: #68e0b1; }
-    .guidance {
-      display: none; padding: 13px; margin-top: 9px; border-radius: 15px;
-      background: linear-gradient(135deg, rgba(18,157,160,.18), rgba(40,208,196,.07));
-      border: 1px solid rgba(40,208,196,.25);
-    }
+    .status-line { min-height: 30px; color: var(--muted); font-size: 10px; line-height: 1.9; padding: 12px 3px 1px; }
+    .status-line.error { color: var(--danger); }
+    .status-line.good { color: var(--muted); }
+    .guidance { display: none; padding: 15px; margin-top: 15px; border-radius: 13px; background: var(--surface); border: 1px solid var(--line); }
     .guidance.visible { display: block; }
-    .guidance-kicker { color: var(--accent); font-size: 9px; font-weight: 900; }
-    .guidance-main { font-size: 14px; font-weight: 900; line-height: 1.9; margin-top: 5px; }
-    .guidance-next { color: var(--muted); font-size: 10px; margin-top: 5px; line-height: 1.7; }
-    .guidance-distance { color: var(--accent); font-size: 11px; font-weight: 900; margin-top: 7px; }
-    .maneuvers { margin-top: 15px; display: none; }
+    .guidance-kicker { color: var(--muted); font-size: 9px; font-weight: 500; }
+    .guidance-main { font-size: 15px; font-weight: 600; line-height: 1.9; margin-top: 6px; }
+    .guidance-next { color: var(--muted); font-size: 10px; margin-top: 5px; line-height: 1.8; }
+    .guidance-distance { color: var(--text); font-size: 11px; font-weight: 500; margin-top: 9px; }
+    .maneuvers { margin-top: 18px; display: none; }
     .maneuvers.visible { display: block; }
-    .maneuver-list { display: grid; gap: 7px; }
-    .maneuver { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 12px; background: rgba(255,255,255,.035); border: 1px solid transparent; }
-    .maneuver.current { border-color: rgba(40,208,196,.38); background: rgba(40,208,196,.08); }
-    .maneuver-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: none; border-radius: 10px; background: rgba(40,208,196,.12); color: var(--accent); font-size: 16px; }
+    .maneuver-list { display: grid; gap: 0; }
+    .maneuver { display: flex; align-items: flex-start; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .maneuver.current { background: var(--surface); border-radius: 10px; padding-inline: 8px; }
+    .maneuver-icon { width: 28px; height: 30px; display: grid; place-items: center; flex: none; color: var(--text); font-size: 17px; }
     .maneuver-text { flex: 1; min-width: 0; }
-    .maneuver-text strong { display: block; font-size: 11px; line-height: 1.8; }
-    .maneuver-text span { color: var(--muted); font-size: 9px; display: block; margin-top: 3px; }
-    .maneuver-length { color: var(--muted); font-size: 9px; white-space: nowrap; padding-top: 4px; }
-    .panel-foot { padding: 10px 15px 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; line-height: 1.8; }
-    .map-tools { position: fixed; z-index: 12; left: 20px; top: 105px; display: grid; gap: 9px; }
-    .map-tool {
-      width: 45px; height: 45px; display: grid; place-items: center; border: 1px solid var(--line);
-      border-radius: 14px; color: var(--text); background: var(--panel); box-shadow: var(--shadow);
-      backdrop-filter: blur(15px); font-size: 17px; transition: .18s;
-    }
-    .map-tool:hover { color: var(--accent); border-color: rgba(40,208,196,.45); transform: translateY(-2px); }
-    .map-tool svg { width: 19px; height: 19px; }
-    .map-hint {
-      position: fixed; z-index: 10; bottom: 22px; left: 20px; padding: 9px 13px;
-      border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
-      color: var(--muted); font-size: 10px; box-shadow: var(--shadow); backdrop-filter: blur(12px);
-    }
-    .results {
-      display: none; position: absolute; top: calc(100% + 8px); right: 0; left: 0; z-index: 40;
-      max-height: 330px; overflow: auto; border: 1px solid var(--line); border-radius: 15px;
-      background: #102238; box-shadow: var(--shadow);
-    }
+    .maneuver-text strong { display: block; font-size: 11px; font-weight: 500; line-height: 1.9; }
+    .maneuver-text span { color: var(--muted); font-size: 9px; display: block; margin-top: 4px; }
+    .maneuver-length { color: var(--muted); font-size: 9px; white-space: nowrap; padding-top: 5px; }
+    .panel-foot { flex: none; padding: 13px 20px 17px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; line-height: 1.9; }
+    .map-tools { position: fixed; z-index: 12; left: 24px; top: 104px; display: grid; gap: 8px; }
+    .map-tool { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 13px; color: var(--text); background: var(--panel); box-shadow: var(--shadow); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); font-size: 14px; font-weight: 500; }
+    .map-tool:hover { background: var(--panel-2); }
+    .map-tool[aria-pressed="true"] { border-color: rgba(255, 255, 255, .30); background: var(--selected); }
+    .map-tool svg { width: 18px; height: 18px; }
+    .map-hint { position: fixed; z-index: 10; bottom: 22px; left: 80px; max-width: calc(100vw - 490px); padding: 9px 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); color: var(--muted); font-size: 10px; line-height: 1.8; backdrop-filter: blur(20px); }
+    .map-loading { position: fixed; z-index: 25; top: 104px; left: 80px; width: min(320px, calc(100vw - 155px)); padding: 20px; border: 1px solid var(--line); border-radius: 17px; background: var(--panel); box-shadow: var(--shadow); line-height: 1.9; }
+    .map-loading strong { display: block; font-size: 14px; font-weight: 500; }
+    .map-loading p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+    .map-loading::before { content: ""; display: block; width: 19px; height: 19px; margin-bottom: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+    .map-loading.failed::before { display: none; }
+    #retryMap { margin-top: 14px; }
+    .place-card { position: fixed; z-index: 22; left: 80px; bottom: 76px; width: min(320px, calc(100vw - 155px)); max-height: calc(100dvh - 210px); overflow-y: auto; padding: 20px; border: 1px solid var(--line); border-radius: 19px; background: var(--panel); box-shadow: var(--shadow); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+    .place-card h2, #placeTitle { margin: 0; padding-inline-end: 22px; color: var(--text); font-size: 19px; font-weight: 600; line-height: 1.7; overflow-wrap: anywhere; }
+    #placeSubtitle { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.7; text-align: right; overflow-wrap: anywhere; }
+    #placeCategory { margin: 6px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+    .place-actions { margin-top: 14px; }
+    #placeDestination { width: 100%; min-height: 40px; border: 0; border-radius: 10px; color: var(--action-text); background: var(--action); font-size: 12px; font-weight: 500; }
+    .place-close, #closePlace, #placeClose { position: absolute; left: 13px; top: 15px; width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; color: var(--muted); background: var(--surface); font-size: 18px; }
+    .results { display: none; position: absolute; top: calc(100% + 9px); right: 0; left: 0; z-index: 40; max-height: 330px; overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-2); box-shadow: var(--shadow); }
     .results.open { display: block; }
-    .result-item { width: 100%; display: flex; gap: 10px; text-align: right; padding: 12px; border: 0; border-bottom: 1px solid rgba(255,255,255,.06); color: var(--text); background: transparent; }
-    .result-item:hover { background: rgba(40,208,196,.09); }
+    .result-item { width: 100%; display: flex; gap: 11px; text-align: right; padding: 13px 14px; border: 0; border-bottom: 1px solid var(--line); color: var(--text); background: transparent; }
+    .result-item:hover { background: var(--surface-hover); }
     .result-item:last-child { border-bottom: 0; }
-    .result-icon { color: var(--accent); font-size: 17px; }
-    .result-item strong { display: block; font-size: 11px; }
-    .result-item small { display: block; color: var(--muted); font-size: 9px; margin-top: 4px; }
-    .toast {
-      position: fixed; z-index: 60; bottom: 28px; left: 50%; transform: translate(-50%, 20px);
-      opacity: 0; pointer-events: none; padding: 11px 16px; border-radius: 12px;
-      background: #142b40; border: 1px solid rgba(40,208,196,.3); color: var(--text);
-      font-size: 11px; box-shadow: var(--shadow); transition: .25s; max-width: min(90vw, 480px); text-align: center;
-    }
+    .result-icon { flex: none; color: var(--muted); font-size: 16px; }
+    .result-item strong { display: block; font-size: 12px; font-weight: 500; }
+    .result-item small { display: block; color: var(--muted); font-size: 10px; margin-top: 4px; }
+    .toast { position: fixed; z-index: 60; bottom: 28px; left: 50%; transform: translate(-50%, 12px); opacity: 0; pointer-events: none; padding: 12px 17px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); font-size: 12px; box-shadow: var(--shadow); transition: opacity .2s ease, transform .2s ease; max-width: min(90vw, 480px); text-align: center; line-height: 1.8; }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
-    .loading-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 5px; animation: blink 1s infinite alternate; }
-    @keyframes blink { to { opacity: .25; } }
-    body.light {
-      color-scheme: light;
-      --panel: rgba(250,253,255,.95); --panel-2: rgba(235,244,250,.97);
-      --line: rgba(34,65,89,.14); --text: #173047; --muted: #627b91;
-      --shadow: 0 16px 48px rgba(25,57,81,.17);
-    }
-    body.light .searchbox { background: rgba(19,54,79,.045); }
-    body.light .searchbox input { color: var(--text); }
-    body.light .route-input-row { background: rgba(18,55,80,.035); }
-    body.light .route-input-row input { color: var(--text); }
-    body.light .mode-btn { background: rgba(18,55,80,.04); }
-    body.light .mode-btn.active { color: #06232b; }
-    body.light .tool-btn { background: rgba(18,55,80,.04); }
-    body.light .metric, body.light .maneuver { background: rgba(18,55,80,.035); }
-    body.light .guidance { background: rgba(20,160,160,.08); }
-    body.light .results { background: #f8fcff; }
-    body.light .result-item { color: #173047; border-bottom-color: rgba(34,65,89,.09); }
-    body.light .result-item:hover { background: rgba(20,160,160,.08); }
-    body.light .map-hint { background: rgba(250,253,255,.94); }
-    body.light .map-tool { color: #173047; }
-    body.light .icon-btn, body.light .small-btn { color: #173047; background: rgba(19,54,79,.04); }
-    body.light .route-input-row { border-color: rgba(34,65,89,.15); }
-    @media (max-width: 900px) {
-      .topbar { left: 10px; right: 10px; top: 9px; height: 58px; padding: 7px 9px; gap: 8px; border-radius: 16px; }
-      .brand { min-width: 0; gap: 7px; }
-      .brand-mark { width: 38px; height: 38px; border-radius: 12px; }
-      .brand-name { font-size: 11px; }
-      .brand-sub { display: none; }
+    .loading-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-left: 6px; animation: blink 1s infinite alternate; }
+    .maplibregl-ctrl-attrib { font-family: inherit; direction: ltr; }
+    .maplibregl-ctrl-group { border-radius: 12px !important; overflow: hidden; box-shadow: var(--shadow) !important; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes blink { to { opacity: .3; } }
+    body.light { color-scheme: light; --bg: #e7e8e5; --panel: rgba(246, 246, 243, .97); --panel-2: #eeeeeb; --surface: rgba(0, 0, 0, .045); --surface-hover: rgba(0, 0, 0, .075); --line: rgba(0, 0, 0, .10); --text: #292a2c; --muted: #676a6d; --accent: #4d5054; --accent-2: #64676a; --action: #303235; --action-text: #f6f6f3; --selected: #dedfdb; --success: #52755a; --danger: #a23e3b; --shadow: 0 12px 35px rgba(30, 30, 25, .10), 0 2px 7px rgba(30, 30, 25, .06); }
+    body.light .map-tool[aria-pressed="true"] { border-color: rgba(0, 0, 0, .25); }
+    @media (max-width: 1100px) {
+      .topbar { gap: 14px; }
       .top-status { display: none; }
-      .searchbox { height: 40px; padding: 0 9px; gap: 6px; }
-      .searchbox input { font-size: 11px; }
-      .search-submit { padding: 8px 10px; font-size: 10px; }
-      .top-actions { gap: 5px; }
+      .brand { min-width: 190px; }
+    }
+    @media (max-width: 900px) {
+      .topbar { left: 12px; right: 12px; top: 12px; min-height: 56px; padding: 8px; gap: 10px; border-radius: 17px; }
+      .brand { min-width: 0; gap: 8px; }
+      .brand-mark { width: 36px; height: 36px; }
+      .brand-name { font-size: 12px; }
+      .brand-sub { display: none; }
+      .searchbox { height: 38px; padding: 0 9px; gap: 8px; }
+      .searchbox input { font-size: 12px; }
+      .search-submit { padding: 5px 8px; font-size: 10px; }
+      .top-actions { gap: 0; }
       .top-actions .icon-btn { min-width: 36px; width: 36px; height: 36px; padding: 0; }
-      .route-panel { top: auto; right: 9px; left: 9px; bottom: 8px; width: auto; max-height: 48vh; border-radius: 19px; }
-      .panel-head { padding: 12px 14px 8px; }
-      .panel-title { font-size: 14px; margin-top: 3px; }
-      .panel-desc { display: none; }
-      .panel-body { padding: 10px; }
-      .map-tools { top: 78px; left: 10px; gap: 7px; }
+      .route-panel { top: auto; right: 12px; left: 12px; bottom: max(10px, env(safe-area-inset-bottom)); width: auto; max-height: 44dvh; border-radius: 21px; }
+      .panel-head { padding: 13px 16px 9px; }
+      .panel-title { font-size: 17px; margin-top: 0; }
+      .panel-desc, .eyebrow, .panel-foot { display: none; }
+      .panel-body { padding: 10px 13px 12px; }
+      .map-tools { top: 82px; left: 12px; gap: 7px; }
       .map-tool { width: 39px; height: 39px; border-radius: 12px; }
       .map-hint { display: none; }
-      .panel-foot { display: none; }
-      .mode-row { margin-bottom: 10px; }
-      .mode-btn { padding: 7px 4px; }
-      .route-tools { margin-bottom: 10px; }
-      .summary { margin-top: 10px; }
-      .maneuvers { margin-top: 10px; }
+      .map-loading { top: 82px; left: 62px; width: min(320px, calc(100vw - 84px)); }
+      .place-card { top: 82px; left: 62px; bottom: auto; width: min(320px, calc(100vw - 84px)); max-height: 240px; padding: 17px; }
+      .place-card h2, #placeTitle { font-size: 17px; }
+      .mode-row { margin-bottom: 13px; }
+      .mode-btn { padding: 8px 5px; }
+      .route-tools { margin-bottom: 11px; }
+      .summary, .maneuvers { margin-top: 12px; }
+      .toast { bottom: calc(44dvh + 24px); }
     }
     @media (max-width: 480px) {
       .brand-name { display: none; }
-      .brand { width: 38px; }
+      .brand { width: 34px; flex: none; }
+      .brand-mark { width: 34px; height: 34px; }
+      .brand-mark svg { width: 20px; height: 20px; }
       .search-wrap { max-width: none; }
-      .topbar { gap: 6px; }
+      .topbar { gap: 7px; }
       .top-actions .theme-label { display: none; }
-      .route-panel { max-height: 52vh; }
       .panel-head { display: none; }
-      .panel-body { padding: 9px; }
-      .route-input-row { padding: 7px 9px; }
-      .route-input-row input { font-size: 11px; }
-      .primary-btn { height: 42px; }
+      .route-input-row { min-height: 44px; padding: 7px 10px; }
+      .route-input-row input { font-size: 12px; }
+      .section-label { font-size: 10px; margin-top: 3px; }
+      .primary-btn { min-height: 43px; }
+      .secondary-btn { min-height: 40px; }
     }
+    @media (max-height: 600px) and (max-width: 900px) {
+      .route-panel { max-height: 48dvh; width: min(330px, 52vw); left: auto; }
+      .place-card { max-height: calc(100dvh - 100px); }
+      .toast { bottom: 18px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
   </style>
 </head>
 <body>
   <div id="map" aria-label="نقشه تعاملی ایران"></div>
+  <section id="mapLoading" class="map-loading" role="status" aria-live="polite">
+    <strong id="mapLoadingTitle">در حال آماده‌سازی نقشه</strong>
+    <p id="mapLoadingDetail">دریافت ابزار نمایش نقشه…</p>
+    <button id="retryMap" class="small-btn" hidden>تلاش دوباره</button>
+  </section>
 
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z" stroke="currentColor" stroke-width="2"/><path d="m8.5 10 2.1 2.1 4.9-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <div><div class="brand-name">IRAN NAVIGATOR</div><div class="brand-sub">نقشه سه‌بعدی و مسیریاب آزمایشی</div></div>
+      <div><div class="brand-name">Iran Navigator</div><div class="brand-sub">نقشه سه‌بعدی و مسیریاب آزمایشی</div></div>
     </div>
 
     <div class="search-wrap">
@@ -258,24 +248,27 @@
     <button class="map-tool" id="locateButton" title="موقعیت من" aria-label="موقعیت من">
       <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
-    <button class="map-tool" id="threeDButton" title="تغییر حالت سه‌بعدی" aria-label="تغییر حالت سه‌بعدی">3D</button>
+    <button class="map-tool" id="threeDButton" title="تغییر حالت سه‌بعدی" aria-label="تغییر حالت سه‌بعدی" aria-pressed="true">3D</button>
+    <button class="map-tool" id="placesButton" title="نمایش فروشگاه‌ها و مکان‌ها" aria-label="نمایش فروشگاه‌ها و مکان‌ها" aria-pressed="true">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9h16l-2-5H6L4 9Zm1 3v8h14v-8M9 20v-6h6v6M4 9v1a2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
     <button class="map-tool" id="compassButton" title="بازگشت به شمال" aria-label="بازگشت به شمال">N</button>
     <button class="map-tool" id="fullscreenButton" title="تمام صفحه" aria-label="تمام صفحه">⛶</button>
   </aside>
 
   <aside class="route-panel">
     <div class="panel-head">
-      <div class="eyebrow">EXPLORE IRAN</div>
-      <div class="panel-title">مسیریابی هوشمند</div>
-      <div class="panel-desc">مبدأ و مقصد را جست‌وجو کنید یا مستقیماً روی نقشه انتخاب کنید. مسیرها بر اساس داده‌های OpenStreetMap محاسبه می‌شوند.</div>
+      <div class="eyebrow">PLAN YOUR JOURNEY</div>
+      <div class="panel-title">کجا می‌رویم؟</div>
+      <div class="panel-desc">مبدأ و مقصد را انتخاب کنید؛ مسیر را روی نقشه ببینید.</div>
     </div>
 
     <div class="panel-body">
       <div class="section-label">حالت سفر</div>
       <div class="mode-row">
-        <button class="mode-btn active" data-mode="car"><span class="mode-icon">🚘</span>خودرو</button>
-        <button class="mode-btn" data-mode="motorcycle"><span class="mode-icon">🏍️</span>موتور</button>
-        <button class="mode-btn" data-mode="walking"><span class="mode-icon">🚶</span>پیاده</button>
+        <button class="mode-btn active" data-mode="car"><span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 9 2-5h10l2 5M4 9h16v9H4zM7 18v2m10-2v2M7 13h2m6 0h2"/></svg></span>خودرو</button>
+        <button class="mode-btn" data-mode="motorcycle"><span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="17" r="3.2"/><circle cx="19" cy="17" r="3.2"/><path d="m5 17 5-8 4 8H5m0-8h5m4-5h3l2 13m-8-4h6"/></svg></span>موتور</button>
+        <button class="mode-btn" data-mode="walking"><span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="m10 22 2-7-3-3 2-4 3 1 2 4 4 1M5 12l3-1 2-3m2 7 4 7"/></svg></span>پیاده</button>
       </div>
 
       <div class="section-label">انتخاب مسیر</div>
@@ -330,6 +323,13 @@
 
   <div class="map-hint">برای انتخاب مبدأ یا مقصد، حالت انتخاب را فعال کنید و روی نقشه بزنید.</div>
   <div id="toast" class="toast"></div>
+  <section id="placeCard" class="place-card" aria-label="اطلاعات مکان" hidden>
+    <button id="closePlace" class="icon-btn" aria-label="بستن اطلاعات مکان">×</button>
+    <strong id="placeTitle" dir="auto"></strong>
+    <small id="placeSubtitle" class="place-subtitle" dir="ltr"></small>
+    <p id="placeCategory"></p>
+    <div class="place-actions"><button id="placeDestination" class="primary-btn">انتخاب به‌عنوان مقصد</button></div>
+  </section>
 
   <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
   <script>
@@ -348,6 +348,8 @@
         mode: "car",
         theme: "dark",
         is3D: true,
+        showPlaces: true,
+        selectedPlace: null,
         selection: null,
         origin: null,
         destination: null,
@@ -372,6 +374,13 @@
 
       let map;
       let mapLoadTimeout = null;
+      let styleRequest = 0;
+      let appliedStyleRequest = 0;
+      let stylePending = false;
+      let mapHadErrors = false;
+      const styleCache = new Map();
+      let rtlReady;
+      let placesRankLimit = null;
       let routeSourceReady = false;
       let userSourceReady = false;
       let accuracySourceReady = false;
@@ -414,20 +423,128 @@
         $("calculateButton").innerHTML = busy ? '<span class="loading-dot"></span>در حال محاسبه مسیر...' : "محاسبه مسیر جاده‌ای";
       }
 
+      function showMapLoading(title, detail, failed) {
+        $("mapLoading").hidden = false;
+        $("mapLoading").classList.toggle("failed", !!failed);
+        $("mapLoadingTitle").textContent = title;
+        $("mapLoadingDetail").textContent = detail;
+        $("retryMap").hidden = !failed;
+        $("map").setAttribute("aria-busy", failed ? "false" : "true");
+        $("connectionStatus").textContent = title;
+      }
+
+      // Shape joined Persian/Arabic letters in the map worker, before loading labels.
+      function prepareRTL() {
+        if (maplibregl.getRTLTextPluginStatus() === "loaded") return Promise.resolve();
+        if (!rtlReady) {
+          if (maplibregl.getRTLTextPluginStatus() === "loading") {
+            return Promise.reject(new Error("RTL plugin is still loading"));
+          }
+          let timeout;
+          const plugin = maplibregl.setRTLTextPlugin(
+            "https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js",
+            false
+          );
+          rtlReady = Promise.race([
+            plugin,
+            new Promise(function (_, reject) {
+              timeout = setTimeout(function () { reject(new Error("RTL plugin timed out")); }, 20000);
+            })
+          ]).catch(function (error) { rtlReady = null; throw error; })
+            .finally(function () { clearTimeout(timeout); });
+        }
+        return rtlReady;
+      }
+
+      function bilingualNameExpression() {
+        const local = ["coalesce", ["get", "name:fa"], ["get", "name:nonlatin"], ["get", "name"], ["get", "name:latin"], ["get", "name_en"], ""];
+        const english = ["coalesce", ["get", "name:en"], ["get", "name_en"], ["get", "name:latin"], ""];
+        // Keep one text section: the RTL plugin's styled-text path is incompatible
+        // with this MapLibre version. A single multiline string shapes both scripts.
+        return ["concat", local,
+          ["case", ["all", ["!=", english, ""], ["!=", local, english]], ["concat", "\n", english], ""]];
+      }
+
+      function prepareStyle(raw, theme) {
+        const style = JSON.parse(JSON.stringify(raw));
+        // Reuse the base style's tile source for buildings, roads and labels.
+        style.sources.openfreemap = style.sources.openmaptiles;
+        delete style.sources.openmaptiles;
+        style.layers.forEach(function (layer) {
+          if (layer.source === "openmaptiles") layer.source = "openfreemap";
+          if (layer.type === "symbol" && layer.layout && layer.layout["text-field"] &&
+              !JSON.stringify(layer.layout["text-field"]).includes('"ref"')) {
+            // Separate local and English names into two readable lines; keep road shields intact.
+            layer.layout["text-field"] = bilingualNameExpression();
+            layer.layout["text-letter-spacing"] = 0;
+            layer.layout["text-line-height"] = 1.4;
+            layer.layout["text-padding"] = 3;
+          }
+          if (theme !== "dark") return;
+          const paint = layer.paint || (layer.paint = {});
+          const sourceLayer = layer["source-layer"];
+          if (layer.type === "background") paint["background-color"] = "#303438";
+          if (layer.type === "fill") {
+            const colors = {water: "#2d444e", landcover: "#34473e", landuse: "#39463f", building: "#464c51", aeroway: "#4c5359", transportation: "#62696e"};
+            if (colors[sourceLayer]) paint["fill-color"] = colors[sourceLayer];
+            if (sourceLayer === "landcover") delete paint["fill-pattern"];
+            if (sourceLayer === "building") paint["fill-outline-color"] = "#646c72";
+          }
+          if (layer.type === "line") {
+            if (sourceLayer === "transportation") {
+              paint["line-color"] = /casing/.test(layer.id) ? "#393e43" : /motorway|major/.test(layer.id) ? "#a29f98" : "#737b81";
+            } else if (sourceLayer === "waterway") paint["line-color"] = "#3e718b";
+            else if (sourceLayer === "boundary") paint["line-color"] = "#91a4b7";
+          }
+          if (layer.type === "symbol" && layer.layout && layer.layout["text-field"]) {
+            paint["text-color"] = sourceLayer === "water_name" ? "#b6c9ce" : "#e8e8e5";
+            paint["text-halo-color"] = "#303438";
+            paint["text-halo-width"] = 1.5;
+            paint["text-halo-blur"] = .5;
+          }
+        });
+        style.light = {anchor: "viewport", color: "#ffffff", intensity: .45, position: [1.15, 210, 35]};
+        return style;
+      }
+
+      async function loadMapStyle(forceReload) {
+        const request = ++styleRequest;
+        const theme = state.theme;
+        stylePending = true;
+        mapHadErrors = false;
+        clearTimeout(mapLoadTimeout);
+        showMapLoading("در حال دریافت نقشه", "آماده‌سازی نوشته‌های فارسی و نقشه پایه…");
+        mapLoadTimeout = setTimeout(function () {
+          if (request === styleRequest) showMapLoading("اتصال به نقشه کند است", "می‌توانید دوباره تلاش کنید؛ دریافت نقشه همچنان ادامه دارد.", true);
+        }, 25000);
+        try {
+          if (!styleCache.has(theme)) {
+            const response = await fetch(theme === "dark" ? STYLE_DARK : STYLE_LIGHT, {signal: AbortSignal.timeout(20000)});
+            if (!response.ok) throw new Error("Map style HTTP " + response.status);
+            styleCache.set(theme, await response.json());
+          }
+          await prepareRTL();
+          if (request !== styleRequest) return;
+          appliedStyleRequest = request;
+          map.setStyle(prepareStyle(styleCache.get(theme), theme), {diff: !forceReload});
+          showMapLoading("در حال نمایش نقشه", "دریافت خیابان‌ها، نام مکان‌ها و ساختمان‌ها…");
+        } catch (error) {
+          if (request !== styleRequest) return;
+          clearTimeout(mapLoadTimeout);
+          console.warn("Map preparation:", error.message);
+          showMapLoading("نقشه بارگذاری نشد", "اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.", true);
+        }
+      }
+
       function initMap() {
         if (!maplibregl || typeof maplibregl.Map !== "function") {
-          $("connectionStatus").textContent = "کتابخانه نقشه در دسترس نیست";
-          setStatus("کتابخانه MapLibre بارگذاری نشد. اتصال به CDN را بررسی کنید.", "error");
+          showMapLoading("ابزار نقشه بارگذاری نشد", "اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.", true);
           return;
         }
-
-        $("connectionStatus").textContent = "در حال بارگذاری نقشه...";
-        setStatus("در حال دریافت نقشه پایه و اطلاعات شهر...", null);
-
         try {
           map = new maplibregl.Map({
             container: "map",
-            style: STYLE_DARK,
+            style: null,
             center: TEHRAN,
             zoom: 15.2,
             pitch: 48,
@@ -438,49 +555,55 @@
           });
         } catch (error) {
           console.error("Iran Navigator: map initialization failed.", error);
-          $("connectionStatus").textContent = "خطای راه‌اندازی نقشه";
-          setStatus("مرورگر نتوانست نقشه را راه‌اندازی کند. پشتیبانی WebGL و شتاب‌دهی گرافیکی را بررسی کنید.", "error");
+          showMapLoading("خطای راه‌اندازی نقشه", "این مرورگر نتوانست نمایش گرافیکی نقشه را راه‌اندازی کند.", true);
           return;
         }
-
-        mapLoadTimeout = window.setTimeout(function () {
-          if (!map || !map.isStyleLoaded()) {
-            $("connectionStatus").textContent = "بارگذاری نقشه طول کشیده است";
-            setStatus("دریافت نقشه بیش از ۲۵ ثانیه طول کشیده است. اتصال به سرویس نقشه یا درخواست‌های مسدودشده را بررسی کنید.", "error");
-          }
-        }, 25000);
-
         map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-left");
-        map.on("load", function () {
-          if (mapLoadTimeout) {
-            window.clearTimeout(mapLoadTimeout);
-            mapLoadTimeout = null;
-          }
+        map.on("style.load", function () {
+          if (appliedStyleRequest !== styleRequest) return;
+          stylePending = false;
           setupMapLayers();
+          renderPointMarkers();
+        });
+        map.on("idle", function () {
+          if (stylePending || mapHadErrors || !map.getLayer("route-line")) return;
+          clearTimeout(mapLoadTimeout);
+          $("mapLoading").hidden = true;
+          $("map").setAttribute("aria-busy", "false");
           $("connectionStatus").textContent = "نقشه آماده است";
-          setStatus("نقشه آماده است؛ مبدأ و مقصد را انتخاب کنید.", "good");
         });
         map.on("error", function (event) {
           if (event && event.error) console.warn("MapLibre:", event.error.message);
+          if (!$("mapLoading").hidden) {
+            mapHadErrors = true;
+            showMapLoading("دریافت بخشی از نقشه ناموفق بود", "اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.", true);
+          }
         });
         map.on("click", function (event) {
-          if (!state.selection) return;
+          const place = placeAt(event.point);
+          if (!state.selection) {
+            if (place) showPlace(place);
+            else closePlace();
+            return;
+          }
           const selected = state.selection;
-          const point = { lon: event.lngLat.lng, lat: event.lngLat.lat, label: "نقطه انتخاب‌شده روی نقشه" };
+          const point = place ? placePoint(place) : { lon: event.lngLat.lng, lat: event.lngLat.lat, label: "نقطه انتخاب‌شده روی نقشه" };
           assignPoint(selected, point);
+          closePlace();
           if (selected === "destination") state.selection = null;
           updatePickButtons();
         });
+        map.on("mousemove", function (event) {
+          map.getCanvas().style.cursor = state.selection ? "crosshair" : placeAt(event.point) ? "pointer" : "";
+        });
+        map.on("zoomend", updatePlaceDensity);
+        loadMapStyle();
       }
 
       function setupMapLayers() {
         routeSourceReady = false;
         userSourceReady = false;
         accuracySourceReady = false;
-
-        if (!map.getSource("openfreemap")) {
-          map.addSource("openfreemap", { type: "vector", url: "https://tiles.openfreemap.org/planet" });
-        }
 
         if (state.is3D) addBuildingLayer();
 
@@ -493,7 +616,7 @@
         map.addLayer({
           id: "route-line", type: "line", source: "route-source",
           layout: { "line-cap": "round", "line-join": "round" },
-          paint: { "line-color": "#17c9c2", "line-width": 5.5, "line-opacity": 1 }
+          paint: { "line-color": "#3485f5", "line-width": 5.5, "line-opacity": 1 }
         });
         routeSourceReady = true;
         if (state.route) drawRoute();
@@ -516,10 +639,88 @@
         });
         userSourceReady = true;
         updateUserLayers();
+        setupPlaces();
       }
 
       function emptyFeatureCollection() {
         return { type: "FeatureCollection", features: [] };
+      }
+
+      function setupPlaces() {
+        map.addLayer({
+          id: "iran-places", type: "symbol", source: "openfreemap", "source-layer": "poi", minzoom: 15,
+          layout: {
+            "visibility": state.showPlaces ? "visible" : "none",
+            "icon-image": ["match", ["get", "class"],
+              ["grocery", "clothing_store", "cafe", "restaurant", "fast_food", "pharmacy", "bakery", "bank"], ["get", "class"], "shop"],
+            "icon-size": .9,
+            "icon-padding": 4,
+            "text-field": bilingualNameExpression(),
+            "text-font": ["Noto Sans Regular"],
+            "text-size": ["interpolate", ["linear"], ["zoom"], 15, 11, 18, 13],
+            "text-line-height": 1.4,
+            "text-letter-spacing": 0,
+            "text-variable-anchor": ["top", "bottom", "left", "right"],
+            "text-radial-offset": 1,
+            "text-justify": "auto",
+            "text-max-width": 11,
+            "text-padding": 4,
+            "text-optional": true,
+            "symbol-sort-key": ["to-number", ["coalesce", ["get", "rank"], 1000]],
+            "icon-allow-overlap": false,
+            "text-allow-overlap": false
+          },
+          paint: {
+            "text-color": state.theme === "dark" ? "#eeebe5" : "#40413f",
+            "text-halo-color": state.theme === "dark" ? "#303438" : "#f7f6f2",
+            "text-halo-width": 1.7,
+            "text-halo-blur": .5
+          }
+        });
+        placesRankLimit = null;
+        updatePlaceDensity();
+      }
+
+      function updatePlaceDensity() {
+        if (!map || !map.getLayer("iran-places")) return;
+        const limit = map.getZoom() >= 17 ? 100000 : map.getZoom() >= 16 ? 100 : 30;
+        if (limit === placesRankLimit) return;
+        placesRankLimit = limit;
+        map.setFilter("iran-places", ["all",
+          ["==", ["geometry-type"], "Point"],
+          ["in", ["get", "class"], ["literal", ["shop", "grocery", "clothing_store", "cafe", "restaurant", "fast_food", "pharmacy", "bakery", "hairdresser", "ice_cream", "butcher", "bank"]]],
+          ["<=", ["to-number", ["coalesce", ["get", "rank"], 1000]], limit]
+        ]);
+      }
+
+      function placeAt(point) {
+        if (!map || !state.showPlaces || !map.getLayer("iran-places")) return null;
+        return map.queryRenderedFeatures([[point.x - 5, point.y - 5], [point.x + 5, point.y + 5]], {layers: ["iran-places"]})[0] || null;
+      }
+
+      function placePoint(feature) {
+        const p = feature.properties;
+        const name = p["name:fa"] || p["name:nonlatin"] || p.name || p["name:latin"] || p.name_en;
+        return {lon: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1], label: name || "مکان انتخاب‌شده"};
+      }
+
+      function showPlace(feature) {
+        const p = feature.properties;
+        state.selectedPlace = placePoint(feature);
+        const english = p["name:en"] || p.name_en || p["name:latin"] || "";
+        const categories = {shop: "فروشگاه", grocery: "سوپرمارکت و خواربار", clothing_store: "پوشاک", cafe: "کافه", restaurant: "رستوران", fast_food: "غذای آماده", pharmacy: "داروخانه", bakery: "نانوایی", hairdresser: "آرایشگاه", ice_cream: "بستنی‌فروشی", butcher: "قصابی", bank: "بانک"};
+        $("placeTitle").textContent = state.selectedPlace.label;
+        $("placeSubtitle").textContent = english !== state.selectedPlace.label ? english : "";
+        $("placeSubtitle").hidden = !$("placeSubtitle").textContent;
+        $("placeCategory").textContent = (categories[p.class] || "مکان") + " · OpenStreetMap";
+        $("placeCard").hidden = false;
+        $("placeDestination").focus({preventScroll: true});
+      }
+
+      function closePlace() {
+        if ($("placeCard").contains(document.activeElement) && map) map.getCanvas().focus({preventScroll: true});
+        $("placeCard").hidden = true;
+        state.selectedPlace = null;
       }
 
       function addBuildingLayer() {
@@ -528,8 +729,11 @@
           map.addSource("openfreemap", { type: "vector", url: "https://tiles.openfreemap.org/planet" });
         }
         const layers = map.getStyle().layers || [];
+        const buildingIndex = layers.findIndex(function (layer) { return layer["source-layer"] === "building"; });
         let beforeId;
-        for (let i = 0; i < layers.length; i++) {
+        // Water labels can precede the flat building fill. Insert above that fill,
+        // while keeping street and place labels above the extrusions.
+        for (let i = buildingIndex + 1; i < layers.length; i++) {
           if (layers[i].type === "symbol" && layers[i].layout && layers[i].layout["text-field"]) {
             beforeId = layers[i].id;
             break;
@@ -543,20 +747,20 @@
           minzoom: 14,
           filter: [
             "all",
-            ["!=", ["get", "hide_3d"], true],
-            ["any", ["has", "render_height"], ["has", "height"]]
+            ["!", ["in", ["get", "hide_3d"], ["literal", [true, 1, "true", "1"]]]],
+            [">", ["to-number", ["coalesce", ["get", "render_height"], ["get", "height"]], 0], 0]
           ],
           paint: {
-            "fill-extrusion-color": state.theme === "dark" ? "#71879c" : "#b5c6d6",
+            "fill-extrusion-color": state.theme === "dark" ? "#a5afb5" : "#b8bfc5",
             "fill-extrusion-height": [
               "interpolate", ["linear"], ["zoom"],
               14, 0,
-              15, ["coalesce", ["get", "render_height"], ["get", "height"], 0]
+              15, ["max", 0, ["to-number", ["coalesce", ["get", "render_height"], ["get", "height"]], 0]]
             ],
             "fill-extrusion-base": [
               "interpolate", ["linear"], ["zoom"],
               14, 0,
-              15, ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0]
+              15, ["min", ["max", 0, ["to-number", ["coalesce", ["get", "render_min_height"], ["get", "min_height"]], 0]], ["max", 0, ["to-number", ["coalesce", ["get", "render_height"], ["get", "height"]], 0]]]
             ],
             "fill-extrusion-opacity": 0.92
           }
@@ -568,22 +772,18 @@
         document.body.classList.toggle("light", theme === "light");
         $("themeTop").textContent = theme === "dark" ? "☼" : "☾";
         if (!map) return;
-        const center = map.getCenter();
-        const zoom = map.getZoom();
-        const pitch = map.getPitch();
-        const bearing = map.getBearing();
-        map.setStyle(theme === "dark" ? STYLE_DARK : STYLE_LIGHT);
-        map.once("style.load", function () {
-          setupMapLayers();
-          map.jumpTo({ center: center, zoom: zoom, pitch: pitch, bearing: bearing });
-          renderPointMarkers();
-        });
+        loadMapStyle();
       }
 
       function toggle3D() {
         state.is3D = !state.is3D;
         $("threeDButton").textContent = state.is3D ? "3D" : "2D";
+        $("threeDButton").setAttribute("aria-pressed", String(state.is3D));
         if (!map) return;
+        if (!map.isStyleLoaded()) {
+          map.jumpTo({pitch: state.is3D ? 55 : 0});
+          return;
+        }
         if (state.is3D && !map.getLayer("iran-buildings-3d")) {
           addBuildingLayer();
         } else if (!state.is3D && map.getLayer("iran-buildings-3d")) {
@@ -653,7 +853,7 @@
       function updatePickButtons() {
         $("pickOrigin").classList.toggle("active", state.selection === "origin");
         $("pickDestination").classList.toggle("active", state.selection === "destination");
-        if (state.selection) {
+        if (state.selection && map) {
           map.getCanvas().style.cursor = "crosshair";
           toast(state.selection === "origin" ? "روی نقشه محل مبدأ را انتخاب کنید." : "روی نقشه محل مقصد را انتخاب کنید.");
         } else if (map) {
@@ -1346,6 +1546,29 @@
       }
 
       function bindEvents() {
+        $("retryMap").addEventListener("click", function () {
+          if (map && !["error", "loading"].includes(maplibregl.getRTLTextPluginStatus())) loadMapStyle(true);
+          else window.location.reload();
+        });
+        $("placesButton").addEventListener("click", function () {
+          state.showPlaces = !state.showPlaces;
+          $("placesButton").setAttribute("aria-pressed", String(state.showPlaces));
+          if (map && map.getLayer("iran-places")) map.setLayoutProperty("iran-places", "visibility", state.showPlaces ? "visible" : "none");
+          if (!state.showPlaces) closePlace();
+          toast(state.showPlaces ? "مکان‌ها از زوم ۱۵ نمایش داده می‌شوند؛ برای جزئیات بیشتر نزدیک‌تر شوید." : "نمایش مکان‌ها خاموش شد.");
+        });
+        $("closePlace").addEventListener("click", closePlace);
+        $("placeDestination").addEventListener("click", function () {
+          if (!state.selectedPlace) return;
+          assignPoint("destination", state.selectedPlace);
+          state.selection = null;
+          updatePickButtons();
+          closePlace();
+          $("calculateButton").focus();
+        });
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") closePlace();
+        });
         document.querySelectorAll(".mode-btn").forEach(function (button) {
           button.addEventListener("click", function () { setMode(button.dataset.mode); });
         });

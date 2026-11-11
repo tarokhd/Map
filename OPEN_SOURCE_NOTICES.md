@@ -4,6 +4,7 @@ Iran Navigator uses the following open-source projects and public prototype serv
 
 - MapLibre Native Android SDK: https://github.com/maplibre/maplibre-native
 - MapLibre GL JS: https://maplibre.org/maplibre-gl-js/docs/
+- Mapbox GL RTL Text 0.3.0 (Persian/Arabic text shaping plugin): https://github.com/mapbox/mapbox-gl-rtl-text
 - OpenFreeMap styles and vector tiles: https://openfreemap.org/
 - OpenStreetMap data and contributors: https://www.openstreetmap.org/copyright
 - Valhalla routing engine: https://valhalla.github.io/valhalla/
