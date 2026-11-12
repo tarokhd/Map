@@ -137,9 +137,16 @@ async function searchPlace(p, q) {
   await p.locator(".search-result").first().click();
 }
 async function routeReady(p) {
-  await p.waitForFunction(
-    () => !document.querySelector("#previewRoute").disabled,
-  );
+  try {
+    await p.waitForFunction(() => !document.querySelector("#previewRoute").disabled);
+  } catch (error) {
+    const status = await p.evaluate(async () => {
+      const {state} = await import('./app.mjs');
+      return {message: document.querySelector('#routeStatus').textContent, origin: document.querySelector('#changeOrigin').textContent,
+        hasOrigin: !!state.origin, mode: state.mode, routes: state.routes.length};
+    });
+    throw new Error(`Route did not become ready: ${JSON.stringify(status)}`, {cause: error});
+  }
 }
 (async () => {
   const browser = await chromium.launch({
