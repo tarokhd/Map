@@ -448,10 +448,14 @@ function addPlaces() {
 function queryContext() {
   if (!map?.isStyleLoaded()) return;
   const c = map.project(environmentPoint());
-  const features = map.queryRenderedFeatures([
-    [c.x - 80, c.y - 80],
-    [c.x + 80, c.y + 80],
-  ]);
+  // In first person the ground directly below the camera is outside the view.
+  // Classify the visible surrounding landscape rather than that off-screen point.
+  const features = ["navigation", "preview"].includes(state.screen)
+    ? map.queryRenderedFeatures()
+    : map.queryRenderedFeatures([
+        [c.x - 80, c.y - 80],
+        [c.x + 80, c.y + 80],
+      ]);
   const context = classifyEnvironment(features);
   if (context.biome === contextCandidate) contextCount++;
   else {
