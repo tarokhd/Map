@@ -335,6 +335,9 @@ async function routeReady(p) {
     console.log(
       "PASS: Motorcycle fallback, walking mode, optional cockpit and live GPS navigation.",
     );
+    await p.waitForFunction(() => !smokeMap.isMoving() && smokeMap.loaded());
+    assert.deepEqual(await p.evaluate(() => mapErrors), []);
+    assert.deepEqual(errors, []);
     await p.evaluate(async () => {
       await navigator.serviceWorker.ready;
     });
@@ -353,10 +356,11 @@ async function routeReady(p) {
     });
     await p.context().setOffline(false);
     assert.equal(offline, true);
-    assert.deepEqual(await p.evaluate(() => mapErrors), []);
+    // Deliberately going offline may fail background map-tile requests. Maps are
+    // online-only; verify rendering errors before this intentional disconnect.
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: Cached visual assets work offline; no page or map-worker errors.",
+      "PASS: Cached visual assets work offline without a JavaScript crash.",
     );
     const denied = await browser.newPage({
       viewport: { width: 390, height: 844 },
