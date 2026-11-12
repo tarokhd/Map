@@ -138,14 +138,23 @@ async function searchPlace(p, q) {
 }
 async function routeReady(p) {
   try {
-    await p.waitForFunction(() => !document.querySelector("#previewRoute").disabled);
+    await p.waitForFunction(
+      () => !document.querySelector("#previewRoute").disabled,
+    );
   } catch (error) {
     const status = await p.evaluate(async () => {
-      const {state} = await import('./app.mjs');
-      return {message: document.querySelector('#routeStatus').textContent, origin: document.querySelector('#changeOrigin').textContent,
-        hasOrigin: !!state.origin, mode: state.mode, routes: state.routes.length};
+      const { state } = await import("./app.mjs");
+      return {
+        message: document.querySelector("#routeStatus").textContent,
+        origin: document.querySelector("#changeOrigin").textContent,
+        hasOrigin: !!state.origin,
+        mode: state.mode,
+        routes: state.routes.length,
+      };
     });
-    throw new Error(`Route did not become ready: ${JSON.stringify(status)}`, {cause: error});
+    throw new Error(`Route did not become ready: ${JSON.stringify(status)}`, {
+      cause: error,
+    });
   }
 }
 (async () => {
@@ -199,6 +208,15 @@ async function routeReady(p) {
         .textContent.includes("دسترس نیست"),
     );
     assert.equal(await p.locator(".search-result").count(), 0);
+    // CDP timestamps mocked GPS at setGeolocation(), not at getCurrentPosition().
+    // Slow map setup must not turn this intentionally valid fixture into stale GPS.
+    await p
+      .context()
+      .setGeolocation({
+        longitude: ORIGIN[0],
+        latitude: ORIGIN[1],
+        accuracy: 8,
+      });
     await searchPlace(p, "موزه");
     await routeReady(p);
     assert.equal(await p.locator("#homeDock").isVisible(), false);
@@ -292,6 +310,13 @@ async function routeReady(p) {
     await p.locator("#stopNavigation").click();
     await p.locator('[data-mode="car"]').click();
     await routeReady(p);
+    await p
+      .context()
+      .setGeolocation({
+        longitude: ORIGIN[0],
+        latitude: ORIGIN[1],
+        accuracy: 8,
+      });
     await p.locator("#startNavigation").click();
     await p.waitForFunction(
       () =>
