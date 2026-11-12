@@ -400,5 +400,12 @@ async function routeReady(p) {
   }
 })().catch((e) => {
   console.error(e);
+  if (process.env.GITHUB_ACTIONS) {
+    const message = String(e.stack || e)
+      .replace(/%/g, "%25")
+      .replace(/\r/g, "%0D")
+      .replace(/\n/g, "%0A");
+    console.error(`::error title=Navigation browser test failed::${message}`);
+  }
   process.exit(1);
 });
