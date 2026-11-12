@@ -23,7 +23,10 @@ sources = {
         "view": (ROOT / "ios/Sources/Views/ContentView.swift").read_text(encoding="utf-8"),
     },
     "Web": {
-        "app": (ROOT / "web/index.html").read_text(encoding="utf-8"),
+        "app": "\n".join(
+            (ROOT / name).read_text(encoding="utf-8")
+            for name in ("web/index.html", "web/app.mjs", "web/navigation.mjs", "web/environment.mjs")
+        ),
     },
 }
 
@@ -99,20 +102,18 @@ for schema_name in ("RouteRequest", "RouteResponse", "RouteOption", "RouteLeg", 
 require("Web", "app", 'src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"', "MapLibre GL JS 5.24 UMD script")
 require("Web", "app", 'href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css"', "MapLibre 5.24 CSS")
 require("Web", "app", "const maplibregl = window.maplibregl", "MapLibre UMD global namespace")
-if 'type="module"' in sources["Web"]["app"] or 'await import("./vendor/maplibre-gl.mjs")' in sources["Web"]["app"]:
-    errors.append("Web: unexpected local ES module loader; stable UMD loader should be used")
 
 require("Web", "app", 'source: "openfreemap"', "vector tile source")
 require("Web", "app", '"source-layer": "building"', "3D building source-layer")
-require("Web", "app", '"fill-extrusion-height"', "3D building height attribute")
-require("Web", "app", '"fill-extrusion-base"', "3D building base height")
+require("Web", "app", "fill-extrusion-height", "3D building height attribute")
+require("Web", "app", "fill-extrusion-base", "3D building base height")
 require("Web", "app", "zoom: 15.2", "default camera zoom that reveals 3D buildings")
 require("Web", "app", "minzoom: 14", "building layer zoom threshold")
-require("Web", "app", "Math.max(map.getZoom(), 15.0)", "automatic zoom-in when enabling 3D")
-require("Web", "app", '"accuracy-source"', "GPS accuracy radius")
+require("Web", "app", "function beginMovement", "route-first immersive navigation")
+require("Web", "app", "accuracy-source", "GPS accuracy radius")
 require("Web", "app", "navigator.geolocation.watchPosition", "continuous browser geolocation")
 require("Web", "app", "distanceAlongRoute", "distance-along-route guidance progress")
-require("Web", "app", 'shape_format: "polyline6"', "polyline6 route request")
+require("Web", "app", 'shape_format: \"polyline6\"', "polyline6 route request")
 
 if errors:
     print("Navigation parity checks FAILED:")

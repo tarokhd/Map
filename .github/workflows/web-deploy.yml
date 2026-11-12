@@ -6,7 +6,9 @@ on:
     paths:
       - "web/**"
       - "shared/**"
+      - "scripts/web_map_smoke.cjs"
       - ".github/workflows/web-deploy.yml"
+      - ".github/workflows/web-browser-smoke.yml"
   workflow_dispatch:
 
 permissions:
@@ -19,46 +21,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate:
+    uses: ./.github/workflows/web-browser-smoke.yml
+    permissions:
+      contents: read
   deploy:
+    needs: validate
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Validate original MapLibre v5.24 UMD assets and app script
-        run: |
-          test -s web/index.html
-          grep -q 'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js' web/index.html
-          grep -q 'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css' web/index.html
-          curl -fLsS --retry 2 --retry-delay 2 -o /dev/null https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js
-          curl -fLsS --retry 2 --retry-delay 2 -o /dev/null https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css
-          node - <<'NODE'
-          const fs = require('fs');
-          const html = fs.readFileSync('web/index.html', 'utf8');
-          const external = '<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>';
-          const externalIndex = html.indexOf(external);
-          if (externalIndex < 0) throw new Error('MapLibre UMD script tag not found');
-          const marker = '<script>';
-          const start = html.indexOf(marker, externalIndex + external.length);
-          const end = html.indexOf('</script>', start + marker.length);
-          if (start < 0 || end < 0) throw new Error('Inline Iran Navigator app script not found');
-          fs.writeFileSync('/tmp/iran-navigator-web.js', html.slice(start + marker.length, end));
-          NODE
-          node --check /tmp/iran-navigator-web.js
-
+      - uses: actions/checkout@v4
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
           enablement: true
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: web
-
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4

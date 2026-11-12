@@ -1,257 +1,404 @@
 const { chromium } = require("playwright");
-
+const assert = require("node:assert/strict");
+const APP = process.env.APP_URL || "http://127.0.0.1:4173/";
+const ORIGIN = [51.405, 35.7006],
+  DESTINATION = [51.417, 35.719];
+const points = [
+  ORIGIN,
+  [51.405, 35.702],
+  [51.405, 35.705],
+  [51.408, 35.705],
+  [51.412, 35.705],
+  [51.412, 35.71],
+  [51.417, 35.71],
+  DESTINATION,
+];
+function encode(points) {
+  let lat = 0,
+    lon = 0,
+    text = "";
+  for (const p of points) {
+    for (let n of [
+      Math.round(p[1] * 1e6) - lat,
+      Math.round(p[0] * 1e6) - lon,
+    ]) {
+      n = n < 0 ? ~(n << 1) : n << 1;
+      while (n >= 32) {
+        text += String.fromCharCode((32 | (n & 31)) + 63);
+        n >>>= 5;
+      }
+      text += String.fromCharCode(n + 63);
+    }
+    lat = Math.round(p[1] * 1e6);
+    lon = Math.round(p[0] * 1e6);
+  }
+  return text;
+}
+function trip(time = 600) {
+  return {
+    summary: { length: 3.5, time },
+    legs: [
+      {
+        shape: encode(points),
+        summary: { length: 3.5, time },
+        maneuvers: [
+          { type: 1, street_names: ["ولیعصر"], end_shape_index: 2 },
+          { type: 10, street_names: ["انقلاب"], end_shape_index: 4 },
+          { type: 15, street_names: ["مقصد"], end_shape_index: 7 },
+        ],
+      },
+    ],
+  };
+}
+async function captureMap(page) {
+  await page.addInitScript(() => {
+    let lib;
+    window.mapErrors = [];
+    Object.defineProperty(window, "maplibregl", {
+      configurable: true,
+      get: () => lib,
+      set(v) {
+        lib = v;
+        const M = v.Map;
+        v.Map = class extends M {
+          constructor(o) {
+            super(o);
+            window.smokeMap = this;
+            this.on("error", (e) =>
+              mapErrors.push(e.error?.message || "Map error"),
+            );
+          }
+        };
+      },
+    });
+  });
+}
+async function services(page, failSearch = false) {
+  const costings = [];
+  let failures = failSearch ? 1 : 0;
+  await page.route("https://photon.komoot.io/api/**", (r) => {
+    if (failures-- > 0) return r.fulfill({ status: 503, body: "unavailable" });
+    const origin = new URL(r.request().url()).searchParams
+      .get("q")
+      .includes("مبدأ");
+    return r.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: origin ? ORIGIN : DESTINATION,
+            },
+            properties: {
+              name: origin ? "مبدأ آزمایشی" : "موزه هنرهای معاصر",
+              city: "تهران",
+              country: "ایران",
+            },
+          },
+        ],
+      }),
+    });
+  });
+  await page.route("https://valhalla1.openstreetmap.de/route", (r) => {
+    const b = r.request().postDataJSON();
+    costings.push(b.costing);
+    assert.equal(b.shape_format, "polyline6");
+    if (b.costing === "motorcycle")
+      return r.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: '{"error":"profile unavailable"}',
+      });
+    const time = b.costing === "pedestrian" ? 2400 : 600;
+    return r.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        trip: trip(time),
+        alternates: [{ trip: trip(time + 120) }],
+      }),
+    });
+  });
+  return costings;
+}
+async function ready(p) {
+  await p.waitForFunction(
+    () => document.querySelector("#mapMessage").hidden,
+    null,
+    { timeout: 60000 },
+  );
+  await p.waitForFunction(() => smokeMap.loaded());
+}
+async function searchPlace(p, q) {
+  await p.locator("#searchInput").fill(q);
+  await p.locator("#searchInput").press("Enter");
+  await p.locator(".search-result").first().waitFor();
+  await p.locator(".search-result").first().click();
+}
+async function routeReady(p) {
+  await p.waitForFunction(
+    () => !document.querySelector("#previewRoute").disabled,
+  );
+}
 (async () => {
   const browser = await chromium.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"]
+    args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
-
   try {
-    const page = await browser.newPage({
+    const p = await browser.newPage({
       viewport: { width: 1440, height: 1000 },
-      deviceScaleFactor: 1
+      geolocation: { longitude: ORIGIN[0], latitude: ORIGIN[1], accuracy: 8 },
+      permissions: ["geolocation"],
     });
-    const pageErrors = [];
-    page.on("pageerror", error => pageErrors.push(error.message));
-    // Capture the real map without adding a test API to the application.
-    await page.addInitScript(() => {
-      let library;
-      Object.defineProperty(window, "maplibregl", {
-        configurable: true,
-        get: () => library,
-        set(value) {
-          library = value;
-          const Map = value.Map;
-          value.Map = class extends Map {
-            constructor(options) {
-              super(options);
-              window.smokeMap = this;
-              window.smokeMapErrors = [];
-              this.on("error", event => window.smokeMapErrors.push(event.error?.message || "Unknown map error"));
-            }
-          };
-        }
-      });
-    });
-
-    const darkStyleUrl = "https://tiles.openfreemap.org/styles/dark";
-    await page.route(darkStyleUrl, route => route.fulfill({status: 503, body: "Unavailable"}));
-    await page.goto(process.env.APP_URL || "http://127.0.0.1:4173/", {
-      waitUntil: "domcontentloaded",
-      timeout: 30000
-    });
-    await page.locator("#retryMap").waitFor({state: "visible"});
-    await page.unroute(darkStyleUrl);
-    await page.locator("#retryMap").click();
-
-    await page.waitForFunction(() => {
-      const status = document.querySelector("#connectionStatus");
-      return status && status.textContent.trim() === "نقشه آماده است";
-    }, null, { timeout: 60000 });
-
-    const initialMap = await page.evaluate(() => {
-      const map = window.smokeMap;
-      const layers = map.getStyle().layers;
-      return {
-        readyMs: Math.round(performance.now()),
-        rtl: maplibregl.getRTLTextPluginStatus(),
-        vectorSources: Object.values(map.getStyle().sources).filter(source => source.type === "vector").length,
-        background: map.getPaintProperty("background", "background-color"),
-        loadingHidden: document.querySelector("#mapLoading").hidden,
-        bilingualNames: layers.filter(layer => layer.type === "symbol" && layer.layout?.["text-field"])
-          .some(layer => {
-            const field = layer.layout["text-field"];
-            const expression = JSON.stringify(field);
-            return field[0] === "concat" && expression.includes('"name:fa"') &&
-              /name:latin|name_en|name:en/.test(expression) && expression.includes('\\n');
-          }),
-        extrusionAboveFill: layers.findIndex(layer => layer.id === "iran-buildings-3d") >
-          layers.findIndex(layer => layer.id === "building"),
-        buildings: map.queryRenderedFeatures({layers: ["iran-buildings-3d"]}).length,
-        hiddenBuildings: map.queryRenderedFeatures({layers: ["iran-buildings-3d"]})
-          .filter(feature => [true, 1, "true", "1"].includes(feature.properties.hide_3d)).length
-      };
-    });
-    if (initialMap.rtl !== "loaded" || !initialMap.bilingualNames || initialMap.vectorSources !== 1 ||
-        initialMap.background !== "#303438" || !initialMap.loadingHidden ||
-        !initialMap.extrusionAboveFill || !initialMap.buildings || initialMap.hiddenBuildings) {
-      throw new Error("Map language, theme or building regression: " + JSON.stringify(initialMap));
-    }
-
-    const canvas = page.locator("#map canvas").first();
-    await canvas.waitFor({ state: "visible", timeout: 15000 });
-    const bounds = await canvas.boundingBox();
-    if (!bounds || bounds.width < 300 || bounds.height < 300) {
-      throw new Error("Map canvas is not visible at a usable size.");
-    }
-
-    // Use a real rendered shop from the live vector tiles, not a synthetic fixture.
-    await page.waitForFunction(() => window.smokeMap.getLayer("iran-places") &&
-      window.smokeMap.queryRenderedFeatures({layers: ["iran-places"]}).length > 0, null, {timeout: 60000});
-    const originalCamera = await page.evaluate(() => {
-      const map = window.smokeMap;
-      const camera = {center: map.getCenter().toArray(), zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing()};
-      const place = map.queryRenderedFeatures({layers: ["iran-places"]})
-        .find(feature => feature.geometry.type === "Point");
-      if (!place) throw new Error("No point geometry for a rendered business.");
-      map.jumpTo({center: place.geometry.coordinates, zoom: Math.max(map.getZoom(), 16.2), pitch: 0});
-      return camera;
-    });
-    await page.waitForFunction(() => window.smokeMap.loaded());
-    const placePoint = await page.evaluate(() => {
-      const map = window.smokeMap;
-      const center = map.project(map.getCenter());
-      return {x: center.x, y: center.y};
-    });
-    await page.mouse.click(placePoint.x, placePoint.y);
-    await page.locator("#placeCard").waitFor({state: "visible"});
-    const placeTitle = (await page.locator("#placeTitle").textContent()).trim();
-    if (!placeTitle || !(await page.locator("#placeCategory").textContent()).trim()) {
-      throw new Error("A real business did not provide a readable name and category.");
-    }
-    await page.locator("#placeDestination").click();
-    if ((await page.locator("#destinationInput").inputValue()).trim() !== placeTitle) {
-      throw new Error("Selecting a business did not set it as the route destination.");
-    }
-    await page.evaluate(camera => window.smokeMap.jumpTo(camera), originalCamera);
-    await page.waitForFunction(() => window.smokeMap.loaded());
-
-    const toggle = page.locator("#threeDButton");
-    await toggle.waitFor({ state: "visible" });
-    await toggle.click();
-    await page.waitForFunction(() => {
-      const button = document.querySelector("#threeDButton");
-      return button && button.textContent.trim() === "2D";
-    }, null, { timeout: 5000 });
-    if (await page.evaluate(() => !!window.smokeMap.getLayer("iran-buildings-3d"))) {
-      throw new Error("2D mode still contains the extrusion layer.");
-    }
-
-    await toggle.click();
-    await page.waitForFunction(() => {
-      const button = document.querySelector("#threeDButton");
-      return button && button.textContent.trim() === "3D";
-    }, null, { timeout: 5000 });
-    await page.waitForFunction(() => window.smokeMap.loaded());
-
-    await page.locator("#placesButton").click();
-    await page.waitForFunction(() => window.smokeMap.queryRenderedFeatures({layers: ["iran-places"]}).length === 0);
-    if (await page.locator("#placesButton").getAttribute("aria-pressed") !== "false") {
-      throw new Error("The places toggle did not hide business markers.");
-    }
-
-    // A failed style request must be recoverable through the visible retry control.
-    const styleUrl = "https://tiles.openfreemap.org/styles/positron";
-    await page.route(styleUrl, route => route.fulfill({status: 503, body: "Unavailable"}));
-    await page.locator("#themeTop").click();
-    await page.locator("#retryMap").waitFor({state: "visible"});
-    if (await page.locator("#mapLoading").isHidden()) throw new Error("Map failure was hidden.");
-    await page.unroute(styleUrl);
-    await page.locator("#retryMap").click();
-    await page.waitForFunction(() => document.querySelector("#mapLoading").hidden, null, {timeout: 60000});
-    if (!(await page.locator("body").evaluate(body => body.classList.contains("light")))) {
-      throw new Error("Light theme did not apply after retry.");
-    }
-    if (await page.locator("#placesButton").getAttribute("aria-pressed") !== "false" ||
-        await page.evaluate(() => window.smokeMap.queryRenderedFeatures({layers: ["iran-places"]}).length > 0)) {
-      throw new Error("Changing the map theme reset the disabled places toggle.");
-    }
-    await page.locator("#placesButton").click();
-    await page.waitForFunction(() => window.smokeMap.queryRenderedFeatures({layers: ["iran-places"]}).length > 0);
-
-    // Quick switches must keep the latest selected theme and one copy of each overlay.
-    await page.locator("#themeTop").click();
-    await page.locator("#themeTop").click();
-    await page.locator("#themeTop").click();
-    await page.waitForFunction(() => document.querySelector("#mapLoading").hidden &&
-      window.smokeMap.getPaintProperty("background", "background-color") === "#303438", null, {timeout: 60000});
-
-    const overlayIds = await page.evaluate(() => window.smokeMap.getStyle().layers
-      .filter(layer => /^(iran-places|iran-buildings-3d|route-line|user-dot)$/.test(layer.id))
-      .map(layer => layer.id));
-    if (overlayIds.length !== 4 || new Set(overlayIds).size !== 4) {
-      throw new Error("Theme switching lost or duplicated application layers: " + overlayIds.join(", "));
-    }
-
-    const mapErrors = await page.evaluate(() => window.smokeMapErrors);
-    if (pageErrors.length || mapErrors.length) {
-      throw new Error("Browser/MapLibre errors: " + [...pageErrors, ...mapErrors].join(" | "));
-    }
-
-    const diagnostics = await page.evaluate(() => {
-      const resources = performance.getEntriesByType("resource")
-        .filter(entry => /unpkg.com|openfreemap.org/.test(entry.name))
-        .map(entry => ({
-          host: new URL(entry.name).host,
-          durationMs: Math.round(entry.duration),
-          transferBytes: entry.transferSize || 0
-        }))
-        .sort((a, b) => b.durationMs - a.durationMs)
-        .slice(0, 8);
-      const canvas = document.querySelector("#map canvas");
-      return {
-        canvasWidth: canvas ? canvas.width : 0,
-        canvasHeight: canvas ? canvas.height : 0,
-        webgl2: !!(canvas && canvas.getContext("webgl2")),
-        resources
-      };
-    });
-
-    await page.screenshot({
-      path: "iran-navigator-web-smoke.png",
-      fullPage: false
-    });
-
-    console.log(
-      "PASS: MapLibre loaded, initial map canvas rendered, and 2D/3D controls toggled."
+    const errors = [];
+    p.on("pageerror", (e) => errors.push(e.message));
+    await captureMap(p);
+    const costings = await services(p, true);
+    await p.goto(APP, { waitUntil: "domcontentloaded" });
+    await ready(p);
+    assert.equal(await p.locator("#homeDock").isVisible(), true);
+    assert.equal(await p.locator("#travelModes").isVisible(), false);
+    const initial = await p.evaluate(() => ({
+      rtl: maplibregl.getRTLTextPluginStatus(),
+      buildings: smokeMap.queryRenderedFeatures({ layers: ["world-buildings"] })
+        .length,
+      sources: Object.values(smokeMap.getStyle().sources).filter(
+        (s) => s.type === "vector",
+      ).length,
+    }));
+    assert.equal(initial.rtl, "loaded");
+    assert.ok(initial.buildings > 0);
+    assert.equal(initial.sources, 1);
+    await p.screenshot({ path: "iran-navigator-web-smoke.png" });
+    await p.setViewportSize({ width: 390, height: 844 });
+    await p.waitForFunction(() => smokeMap.loaded());
+    assert.equal(
+      await p.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+      false,
     );
-    console.log("PASS: Persian RTL and bilingual labels, single vector source, building visibility/order, themes and failed-style retry.");
-    console.log("PASS: Real business markers, details, destination selection and visibility persistence.");
-    await page.setViewportSize({width: 390, height: 844});
-    await page.waitForFunction(() => window.smokeMap.loaded());
-    if (!(await page.locator("#threeDButton").isVisible()) ||
-        await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) {
-      throw new Error("Mobile layout overflows or hides map controls.");
-    }
-    await page.screenshot({path: "iran-navigator-web-mobile-smoke.png"});
-    console.log("PASS: Mobile layout and map controls.");
+    await p.screenshot({ path: "iran-navigator-web-mobile-smoke.png" });
+    await p.setViewportSize({ width: 1440, height: 1000 });
     console.log(
-      "Map canvas: " + Math.round(bounds.width) + "x" + Math.round(bounds.height)
+      "PASS: Minimal home, real vector map/buildings, RTL and mobile layout.",
     );
-    console.log("Initial map ready after navigation start: " + initialMap.readyMs + " ms");
-    console.log("WebGL2 available: " + diagnostics.webgl2);
-    console.log("Slowest map resources: " + JSON.stringify(diagnostics.resources));
-
-    // A hung RTL download must start a fresh request when the user retries.
-    const stalledPage = await browser.newPage({viewport: {width: 1440, height: 1000}});
-    const stalledErrors = [];
-    stalledPage.on("pageerror", error => stalledErrors.push(error.message));
+    await p.locator("#openSearch").click();
+    await p.locator("#searchInput").fill("موزه");
+    await p.locator("#searchInput").press("Enter");
+    await p.waitForFunction(() =>
+      document
+        .querySelector("#searchStatus")
+        .textContent.includes("دسترس نیست"),
+    );
+    assert.equal(await p.locator(".search-result").count(), 0);
+    await searchPlace(p, "موزه");
+    await routeReady(p);
+    assert.equal(await p.locator("#homeDock").isVisible(), false);
+    assert.equal(await p.locator("#travelModes").isVisible(), true);
+    assert.equal(
+      await p.locator("#changeOrigin").textContent(),
+      "موقعیت فعلی من",
+    );
+    assert.equal(await p.locator("[data-route]").count(), 2);
+    console.log(
+      "PASS: Search failure recovery, destination-first travel options, GPS origin and alternatives.",
+    );
+    await p.locator("#openAppearance").click();
+    await p.locator('[data-biome="forest"]').click();
+    await p.locator('[data-light="night"]').click();
+    await p.waitForFunction(
+      () =>
+        document
+          .querySelector("#environmentLabel")
+          .textContent.includes("جنگلی") &&
+        document.querySelector("#environmentLabel").textContent.includes("شب"),
+    );
+    await p.waitForTimeout(2500);
+    const night = await p.evaluate(() =>
+      smokeMap.getPaintProperty("world-buildings", "fill-extrusion-color"),
+    );
+    await p.locator('[data-light="noon"]').click();
+    await p.waitForTimeout(2500);
+    assert.notEqual(
+      await p.evaluate(() =>
+        smokeMap.getPaintProperty("world-buildings", "fill-extrusion-color"),
+      ),
+      night,
+    );
+    await p.locator('[data-light="night"]').click();
+    await p.locator("#closeAppearance").click();
+    await p.locator("#previewRoute").click();
+    await p.waitForFunction(
+      () =>
+        document.body.dataset.screen === "preview" && smokeMap.getPitch() > 70,
+    );
+    assert.ok(
+      (await p.locator("#navigationBadge").textContent()).includes("شبیه‌سازی"),
+    );
+    await p.waitForFunction(async () => {
+      const { state } = await import("./app.mjs");
+      return state.demoDistance > 10;
+    });
+    assert.ok(
+      (await p.locator("#cockpit").getAttribute("src")).endsWith("/car.svg"),
+    );
+    assert.equal(
+      await p.evaluate(() =>
+        smokeMap.getLayoutProperty("world-places", "visibility"),
+      ),
+      "none",
+    );
+    await p.screenshot({ path: "iran-navigator-first-person.png" });
+    await p.locator("#stopNavigation").click();
+    console.log(
+      "PASS: Biome/noon/night transitions, labeled first-person preview and local car asset.",
+    );
+    await p.locator('[data-mode="motorcycle"]').click();
+    await routeReady(p);
+    assert.ok(
+      costings.includes("motorcycle") && costings.includes("motor_scooter"),
+    );
+    assert.ok(
+      (await p.locator("#routeStatus").textContent()).includes("جایگزین"),
+    );
+    await p.locator("#previewRoute").click();
+    assert.ok(
+      (await p.locator("#cockpit").getAttribute("src")).endsWith(
+        "/motorcycle.svg",
+      ),
+    );
+    await p.locator("#stopNavigation").click();
+    await p.locator('[data-mode="walking"]').click();
+    await routeReady(p);
+    assert.ok(costings.includes("pedestrian"));
+    await p.locator("#previewRoute").click();
+    assert.ok(
+      (await p.locator("#cockpit").getAttribute("src")).endsWith(
+        "/walking.svg",
+      ),
+    );
+    await p.locator("#navigationAppearance").click();
+    await p.locator("#cockpitToggle").uncheck();
+    assert.equal(await p.locator("#cockpit").isVisible(), false);
+    await p.locator("#closeAppearance").click();
+    await p.locator("#stopNavigation").click();
+    await p.locator('[data-mode="car"]').click();
+    await routeReady(p);
+    await p.locator("#startNavigation").click();
+    await p.waitForFunction(
+      () =>
+        document.body.dataset.screen === "navigation" &&
+        document.querySelector("#navigationStatus").textContent.includes("GPS"),
+    );
+    await p
+      .context()
+      .setGeolocation({ longitude: 51.405, latitude: 35.7015, accuracy: 8 });
+    await p.waitForFunction(async () => {
+      const { state } = await import("./app.mjs");
+      return state.distanceAlongRoute > 70;
+    });
+    await p.locator("#stopNavigation").click();
+    assert.equal(await p.locator("#journeySheet").isVisible(), true);
+    console.log(
+      "PASS: Motorcycle fallback, walking mode, optional cockpit and live GPS navigation.",
+    );
+    await p.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+    });
+    const cached = await p.evaluate(async () => {
+      const c = await caches.open("navigator-world-v1");
+      return (await c.keys()).map((r) => new URL(r.url).pathname);
+    });
+    assert.ok(
+      cached.some((x) => x.endsWith("/assets/car.svg")) &&
+        cached.some((x) => x.endsWith("/environment.mjs")),
+    );
+    await p.context().setOffline(true);
+    const offline = await p.evaluate(async () => {
+      const r = await fetch("./assets/car.svg?offline-check");
+      return r.ok && (await r.text()).includes("<svg");
+    });
+    await p.context().setOffline(false);
+    assert.equal(offline, true);
+    assert.deepEqual(await p.evaluate(() => mapErrors), []);
+    assert.deepEqual(errors, []);
+    console.log(
+      "PASS: Cached visual assets work offline; no page or map-worker errors.",
+    );
+    const denied = await browser.newPage({
+      viewport: { width: 390, height: 844 },
+      permissions: [],
+    });
+    await captureMap(denied);
+    await services(denied);
+    await denied.addInitScript(() => {
+      navigator.geolocation.getCurrentPosition = (_, reject) =>
+        reject({ code: 1 });
+    });
+    await denied.goto(APP, { waitUntil: "domcontentloaded" });
+    await ready(denied);
+    await denied.locator("#openSearch").click();
+    await searchPlace(denied, "موزه");
+    await denied.waitForFunction(() =>
+      document
+        .querySelector("#routeStatus")
+        .textContent.includes("اجازه موقعیت"),
+    );
+    assert.equal(await denied.locator("#startNavigation").isDisabled(), true);
+    await denied.locator("#changeOrigin").click();
+    await searchPlace(denied, "مبدأ");
+    await routeReady(denied);
+    assert.equal(
+      await denied.locator("#changeOrigin").textContent(),
+      "مبدأ آزمایشی",
+    );
+    await denied.close();
+    console.log(
+      "PASS: Denied GPS uses an explicit manual origin, with no invented position.",
+    );
+    await p.locator("#clearDestination").click();
+    await p.route("https://tiles.openfreemap.org/styles/positron", (r) =>
+      r.fulfill({ status: 503, body: "unavailable" }),
+    );
+    await p.reload({ waitUntil: "domcontentloaded" });
+    await p.locator("#retryMap").waitFor({ state: "visible" });
+    await p.unroute("https://tiles.openfreemap.org/styles/positron");
+    await p.locator("#retryMap").click();
+    await ready(p);
+    console.log("PASS: Map style failure recovers after Retry.");
+    const stalled = await browser.newPage({
+      viewport: { width: 390, height: 844 },
+    });
+    await captureMap(stalled);
     let pluginRequests = 0;
-    await stalledPage.route("**/@mapbox/mapbox-gl-rtl-text@0.3.0/**", route => {
+    await stalled.route("**/@mapbox/mapbox-gl-rtl-text@0.3.0/**", (route) => {
       pluginRequests++;
       if (pluginRequests > 1) return route.fallback();
-      // Leave only this first request unresolved, as with a stalled connection.
     });
-    await stalledPage.clock.install();
-    await stalledPage.goto(process.env.APP_URL || "http://127.0.0.1:4173/", {waitUntil: "domcontentloaded"});
-    await stalledPage.waitForFunction(() => window.maplibregl?.getRTLTextPluginStatus() === "loading");
-    await stalledPage.clock.fastForward(26000);
-    await stalledPage.locator("#retryMap").waitFor({state: "visible"});
-    await stalledPage.clock.resume();
+    await stalled.clock.install();
+    await stalled.goto(APP, { waitUntil: "domcontentloaded" });
+    await stalled.waitForFunction(
+      () => maplibregl.getRTLTextPluginStatus() === "loading",
+    );
+    await stalled.clock.fastForward(21000);
+    await stalled.locator("#retryMap").waitFor({ state: "visible" });
+    await stalled.clock.resume();
     await Promise.all([
-      stalledPage.waitForEvent("domcontentloaded"),
-      stalledPage.locator("#retryMap").click()
+      stalled.waitForEvent("domcontentloaded"),
+      stalled.locator("#retryMap").click(),
     ]);
-    await stalledPage.waitForFunction(() => document.querySelector("#mapLoading").hidden, null, {timeout: 60000});
-    if (pluginRequests < 2 || stalledErrors.length) {
-      throw new Error("Hung RTL retry failed: requests=" + pluginRequests + "; errors=" + stalledErrors.join(" | "));
-    }
-    await stalledPage.close();
-    console.log("PASS: A stalled RTL download recovers after Retry with a new request.");
+    await ready(stalled);
+    assert.ok(pluginRequests >= 2);
+    assert.deepEqual(await stalled.evaluate(() => mapErrors), []);
+    await stalled.close();
+    console.log(
+      "PASS: A stalled RTL download restarts and recovers after Retry.",
+    );
   } finally {
     await browser.close();
   }
-})().catch(error => {
-  console.error(error);
+})().catch((e) => {
+  console.error(e);
   process.exit(1);
 });

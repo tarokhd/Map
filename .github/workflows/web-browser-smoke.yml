@@ -1,12 +1,7 @@
 name: Browser Smoke Test Iran Navigator Web
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "web/**"
-      - "scripts/web_map_smoke.cjs"
-      - ".github/workflows/web-browser-smoke.yml"
+  workflow_call:
   pull_request:
     paths:
       - "web/**"
@@ -30,6 +25,14 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Validate modules and navigation core
+        run: |
+          node --check web/app.mjs
+          node --check web/environment.mjs
+          node --check web/navigation.mjs
+          node --check web/sw.js
+          node --test web/tests/*.test.mjs
+
       - name: Install Playwright
         run: |
           npm install --no-save playwright@1.56.1
@@ -48,7 +51,7 @@ jobs:
           cat "$RUNNER_TEMP/iran-navigator-web-server.log"
           exit 1
 
-      - name: Test real browser map rendering and 2D/3D controls
+      - name: Test destination-first journey, environment and navigation
         run: node scripts/web_map_smoke.cjs
 
       - name: Upload browser screenshot
@@ -59,5 +62,6 @@ jobs:
           path: |
             iran-navigator-web-smoke.png
             iran-navigator-web-mobile-smoke.png
+            iran-navigator-first-person.png
           if-no-files-found: ignore
           retention-days: 7
