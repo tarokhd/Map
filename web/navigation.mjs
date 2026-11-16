@@ -222,7 +222,7 @@ export function normalizeTrip(trip, fallback = false) {
   };
 }
 // Preview only the selected route. A bounded early turn keeps the current road in view.
-export function navigationVision(route, progress, speed, mode = "car") {
+export function navigationVision(route, progress, speed, mode = "car", yawBudget = 20) {
   const length = route.cumulative.at(-1);
   const horizon = mode === "walking" ? 32 : Math.max(85, Math.min(240, Math.max(0, speed) * 8 + 40));
   const maneuver = route.maneuvers?.find(m =>
@@ -231,18 +231,19 @@ export function navigationVision(route, progress, speed, mode = "car") {
   const turn = maneuver && ![4, 5, 6].includes(maneuver.type) && toDecision < horizon;
   const anticipation = turn ? Math.max(0, 1 - toDecision / horizon) : 0;
   const here = pointAt(route, Math.min(progress, length - 1));
-  const ahead = pointAt(route, Math.min(length, progress + (mode === "walking" ? 12 : 25)));
+  const lookDistance = Math.max(mode === "walking" ? 20 : 50, Math.max(0, speed) * 4) + anticipation * 45;
+  const ahead = pointAt(route, Math.min(length, progress + Math.min(lookDistance, Math.max(12, toDecision))));
   let heading = bearing(here, ahead);
   if (anticipation > 0) {
     const after = pointAt(route, Math.min(length, maneuver.startDistance + 35));
     const junction = pointAt(route, maneuver.startDistance);
     if (distance(junction, after) > 1) {
       const delta = angleDelta(heading, bearing(junction, after));
-      heading += Math.max(-32, Math.min(32, delta * anticipation * 0.48));
+      heading += Math.max(-yawBudget, Math.min(yawBudget, delta * anticipation * 0.48));
     }
   }
   return {bearing: (heading + 360) % 360, horizon, anticipation, maneuver, toDecision,
-    lookDistance: Math.max(mode === "walking" ? 20 : 50, Math.max(0, speed) * 4) + anticipation * 45};
+    lookDistance};
 }
 
 export function routeSection(route, start, end) {

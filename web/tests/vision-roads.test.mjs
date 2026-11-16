@@ -15,6 +15,8 @@ test('camera anticipates the selected exit before the junction, preserving curre
  assert.equal(early.maneuver.type,20);
  assert.ok(navigationVision(route,cumulative[1]-150,30).anticipation>navigationVision(route,cumulative[1]-150,5).anticipation);
  assert.equal(navigationVision(route,cumulative[1]-100,1.4,'walking').anticipation,0);
+ const portrait=navigationVision(route,cumulative[1]-35,20,'car',5);
+ assert.ok(portrait.bearing<=5, 'A narrow phone viewport must retain the approach road');
 });
 test('camera follows the outgoing road after passing the exit without oscillating at north',()=>{
  const after=navigationVision(route,cumulative[1]+15,15);

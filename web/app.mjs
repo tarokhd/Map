@@ -1131,7 +1131,9 @@ function updateMovement(point, progress, speed, now) {
   state.speed = speed;
   const length = route.cumulative.at(-1),
     remaining = Math.max(0, length - progress);
-  const vision = navigationVision(route, progress, speed, state.mode);
+  const canvas = map.getCanvas();
+  const horizontalFov = 2 * Math.atan(Math.tan(map.getVerticalFieldOfView() * Math.PI / 360) * canvas.clientWidth / canvas.clientHeight) * 180 / Math.PI;
+  const vision = navigationVision(route, progress, speed, state.mode, clamp(horizontalFov * .28, 3, 20));
   const maneuver = vision.maneuver;
   $("nextInstruction").textContent =
     maneuver?.instruction || "به مسیر ادامه دهید";
