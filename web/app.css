@@ -106,6 +106,35 @@ button {
   gap: 12px;
   pointer-events: none;
 }
+.north-compass {
+  position: fixed;
+  z-index: 8;
+  top: 92px;
+  left: 26px;
+  width: 46px;
+  height: 56px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--panel);
+  color: var(--ink);
+  backdrop-filter: blur(16px);
+  display: grid;
+  place-items: center;
+  direction: ltr;
+}
+.compass-needle { display: grid; justify-items: center; gap: 5px; transform-origin: center; }
+.compass-needle b { font-size: 11px; font-weight: 600; }
+#nextRoadHint { color: #ffe2a6; font-size: 11px; line-height: 1.6; }
+.compass-needle i { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 12px solid var(--accent); }
+.bridge-note { position: fixed; z-index: 5; bottom: 32px; left: 18px; font-size: 9px; color: #b7c5cd; pointer-events: none; }
+body[data-screen="navigation"] .bridge-note,
+body[data-screen="preview"] .bridge-note { bottom: 112px; }
+body[data-screen="navigation"] .north-compass,
+body[data-screen="preview"] .north-compass { top: 176px; }
+.maneuver-glyph svg { width: 38px; height: 38px; stroke-width: 2.2; }
+@media (max-width: 600px) {
+  .north-compass { top: 100px; left: 16px; }
+}
 .identity img {
   opacity: 0.9;
 }

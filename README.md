@@ -5,8 +5,8 @@
 ## ساختار مخزن
 
 ~~~text
-android/                  اپلیکیشن Native اندروید (Kotlin)
-ios/                      اپلیکیشن Native آیفون و آیپد (SwiftUI)
+android/                  پوسته اندروید (Kotlin) با World مشترک
+ios/                      پوسته آیفون و آیپد (SwiftUI) با World مشترک
 web/                      پیش‌نمایش وب (MapLibre GL JS)
 backend/                  API و پایگاه داده مشترک (FastAPI + PostGIS)
 shared/
@@ -24,7 +24,7 @@ scripts/                  بررسی همسانی و تست سرویس‌های 
 ## پلتفرم‌ها
 
 ### Android
-پروژه اندروید در پوشه android قرار دارد.
+پروژه اندروید در پوشه android قرار دارد. رابط و موتور نمایش مشترک داخل APK بسته‌بندی می‌شوند؛ مجوزها و GPS بومی‌اند. [راهنمای اندروید](android/README_FA.md).
 
 ~~~bash
 cd android
@@ -34,7 +34,7 @@ gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
 خروجی: android/app/build/outputs/apk/debug/app-debug.apk
 
 ### iOS
-پروژه Native آیفون در پوشه ios قرار دارد و با SwiftUI، CoreLocation و MapLibre Native ساخته می‌شود.
+پروژه آیفون در پوشه ios با SwiftUI، CoreLocation و WKWebView همان World مشترک را اجرا می‌کند. پیش از xcodegen، `python3 scripts/package_world_assets.py --platform ios --output ios/build/World` را اجرا کنید. [راهنمای iOS](ios/README.md).
 
 روی Mac با Xcode و Homebrew:
 
@@ -63,6 +63,8 @@ docker compose -f backend/compose.yml up --build
 - مستندات API: http://localhost:8000/docs
 
 Backend اکنون health/readiness و endpoint مسیریابی مشترک را پیاده‌سازی می‌کند. اتصال واقعی Neshan به NESHAN_API_KEY نیاز دارد؛ ذخیره مکان، تاریخچه مسیر و همگام‌سازی کاربران هنوز فعال نشده‌اند.
+
+جزئیات هماهنگی وب، اندروید، iOS و نسخه‌های آینده در [معماری World مشترک](docs/SHARED_WORLD.md) ثبت شده است. تغییرات رابط و ناوبری در یک محل اعمال می‌شوند و CI هر نسخه از همان کد ساخته می‌شود.
 
 ## کنترل کیفیت و همسانی
 

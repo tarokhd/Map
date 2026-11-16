@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {measureRoute, navigationVision, angleDelta, routeSection, normalizeTrip} from '../navigation.mjs';
+import {bridgeGeometry} from '../roads.mjs';
+const points = [[51.4,35.7],[51.4,35.71],[51.41,35.71]];
+const cumulative = measureRoute(points);
+const route = {points, cumulative, maneuvers: [{type:20, startDistance:cumulative[1], endDistance:cumulative[2], instruction:'خروجی سمت راست را انتخاب کنید'}]};
+test('camera anticipates the selected exit before the junction, preserving current-road visibility',()=>{
+ const far=navigationVision(route,cumulative[1]-400,20);
+ const early=navigationVision(route,cumulative[1]-130,20);
+ const close=navigationVision(route,cumulative[1]-35,20);
+ assert.equal(far.anticipation,0);
+ assert.ok(early.anticipation>0 && early.bearing>0);
+ assert.ok(close.bearing>early.bearing && close.bearing<=32);
+ assert.equal(early.maneuver.type,20);
+ assert.ok(navigationVision(route,cumulative[1]-150,30).anticipation>navigationVision(route,cumulative[1]-150,5).anticipation);
+ assert.equal(navigationVision(route,cumulative[1]-100,1.4,'walking').anticipation,0);
+});
+test('camera follows the outgoing road after passing the exit without oscillating at north',()=>{
+ const after=navigationVision(route,cumulative[1]+15,15);
+ assert.ok(Math.abs(angleDelta(after.bearing,90))<1);
+ assert.equal(after.maneuver,undefined);
+ const section=routeSection(route,cumulative[1]-30,cumulative[1]+40);
+ assert.equal(section.length,3);
+ assert.deepEqual(section[1],points[1]);
+ assert.deepEqual(routeSection(route,10,10),[]);
+});
+test('bridge decks use bridge tags, road class and layer; underpasses and railways are never raised',()=>{
+ const f=(p,geometry={type:'LineString',coordinates:points.slice(0,2)})=>({properties:p,geometry});
+ const bridge=f({brunnel:'bridge',class:'primary',layer:2});
+ const mesh=bridgeGeometry([bridge,bridge,f({brunnel:'tunnel',class:'primary'}),f({brunnel:'bridge',class:'rail'}),f({class:'primary'})],points[0]);
+ assert.equal(mesh.count,1);
+ assert.ok(mesh.vertices.length>0);
+ const heights=Array.from(mesh.vertices).filter((_,i)=>i%4===2);
+ assert.ok(Math.max(...heights)>12 && Math.min(...heights)>=11);
+ assert.ok(Array.from(mesh.vertices).every(Number.isFinite));
+ assert.equal(bridgeGeometry([f({brunnel:'tunnel',class:'primary'})],points[0]).vertices.length,0);
+});

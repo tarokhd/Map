@@ -25,6 +25,10 @@
   <body data-screen="home">
     <div id="map" aria-label="نقشه تعاملی"></div>
     <div class="world-vignette" aria-hidden="true"></div>
+    <button id="northCompass" class="north-compass" aria-label="برگشت نقشه به جهت شمال" title="جهت شمال">
+      <span id="compassNeedle" class="compass-needle" aria-hidden="true"><b>N</b><i></i></span>
+    </button>
+    <span id="bridgeNote" class="bridge-note" hidden>ارتفاع پل‌ها شماتیک است</span>
     <header class="identity">
       <img src="./assets/mark.svg" width="31" height="31" alt="" />
       <div>
@@ -162,7 +166,7 @@
         <div class="instruction-block">
           <span id="navigationBadge" class="eyebrow">ناوبری زنده</span
           ><strong id="nextInstruction">در حال دریافت موقعیت…</strong
-          ><span id="nextDistance"></span>
+          ><span id="nextDistance"></span><small id="nextRoadHint" hidden></small>
         </div>
       </section>
       <img

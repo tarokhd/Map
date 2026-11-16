@@ -1,44 +1,22 @@
-# Iran Navigator iOS
+# Iran Navigator iOS — World
 
-Native iOS client built with SwiftUI, CoreLocation and MapLibre Native.
+SwiftUI/WKWebView hosts the same packaged World renderer and product UI as Web and Android. CoreLocation handles permission-gated, foreground GPS. No published website is opened. A loopback-only asset server supplies bundled modules and workers with correct MIME types; the native bridge accepts only the current server origin and application path.
 
-## Current prototype scope
+## Build on macOS
 
-- MapLibre map using OpenFreeMap dark and light styles.
-- 3D building extrusion where OpenMapTiles building-height attributes exist.
-- Native CoreLocation location updates and current-location origin.
-- Photon place search with Persian query language and location bias.
-- Valhalla road routing for car, motorcycle (with motor-scooter fallback), and pedestrian modes.
-- Persian turn instruction text generated from Valhalla maneuver types and street names.
-- AVSpeechSynthesizer Persian voice when a Persian system voice is installed.
-- Route polyline, origin/destination markers and live camera following while the app is active.
+Requirements: Xcode 16+, Python 3 and XcodeGen (`brew install xcodegen`). From the repository root:
 
-## Open and build on a Mac
+```sh
+python3 scripts/package_world_assets.py --platform ios --output ios/build/World
+python3 scripts/verify_world_bundles.py ios/build/World
+cd ios
+xcodegen generate
+```
 
-1. Install Xcode 16 or newer and Homebrew.
-2. Install XcodeGen with Homebrew.
-3. From the repository root run: cd ios && xcodegen generate
-4. Open ios/IranNavigator.xcodeproj in Xcode.
-5. Select an iPhone simulator and run the IranNavigator scheme.
+Open `IranNavigator.xcodeproj` and run the scheme on an iPhone simulator. The minimum OS is iOS 16; AbortSignal compatibility shims are packaged for older WebKit versions. First-party UI and pinned renderer libraries are included in the app; map/search/routing still need internet.
 
-The project uses Swift Package Manager to resolve MapLibre Native from the official MapLibre distribution repository.
+Shared compass, roads/alleys, schematic elevated bridges, destination-first journey flow, solar appearance and anticipatory camera come directly from `web/`. Native adapters for routing/models remain for contract compatibility; they do not implement a separate live UI.
 
-## GitHub Actions
+`ios-build.yml` repackages the shared runtime on Web/shared changes, compiles tests, runs unit and local-shell UI tests on a simulator, and uploads a simulator `.app`. This is not an installable iPhone IPA. Physical-device distribution requires Apple signing/provisioning, and physical-device navigation has not been validated here.
 
-The ios-build workflow runs on a macOS runner, generates the Xcode project, builds the iOS Simulator app without code signing, and uploads a zipped .app artifact.
-
-The simulator artifact is for simulator testing only. It is not an installable iPhone IPA. Installing on a physical iPhone or distributing through TestFlight/App Store requires Apple code signing and the appropriate Apple Developer account and provisioning.
-
-## Important prototype limitations
-
-- Public OpenFreeMap, Photon and Valhalla services are used for prototype testing and have no production SLA.
-- Motorcycle route quality depends on the public Valhalla profile and OpenStreetMap access tags; validate routes in Iran.
-- Persian speech depends on a Persian voice being installed and available in iOS. Text guidance remains available when it is not.
-- Location accuracy depends on device, environment and satellite visibility.
-- Live camera tracking and rerouting are intended for foreground use in this prototype. Background navigation and a background location mode are not configured.
-- This prototype does not provide live traffic, offline maps or guaranteed lane-level guidance.
-- The app has not yet been tested on a physical iPhone; successful CI compilation is not a substitute for device testing.
-
-## Attribution
-
-Map rendering: MapLibre Native. Map styles and vector tiles: OpenFreeMap. Map data: OpenStreetMap contributors. Search: Photon. Routing: Valhalla.
+Bridge heights and centre markings are schematic, not surveyed elevations or lane-level guidance. No offline maps, live traffic or background navigation are implemented. See [shared architecture](../docs/SHARED_WORLD.md).

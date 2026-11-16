@@ -1,11 +1,13 @@
 /* Only the small, first-party visual shell is retained. Map tiles are not bulk-downloaded. */
-const CACHE = "navigator-world-v1";
+const CACHE = "navigator-world-v2";
 const ASSETS = [
   "./",
   "./index.html",
   "./app.css",
   "./app.mjs",
+  "./compat.mjs",
   "./navigation.mjs",
+  "./roads.mjs",
   "./environment.mjs",
   "./manifest.webmanifest",
   "./assets/mark.svg",

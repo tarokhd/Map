@@ -165,9 +165,17 @@ export function normalizeTrip(trip, fallback = false) {
     const join = points.length && distance(points.at(-1), decoded[0]) < 1;
     const offset = points.length - (join ? 1 : 0);
     points.push(...(join ? decoded.slice(1) : decoded));
-    for (const m of leg.maneuvers || [])
+    let previousEnd = 0;
+    for (const m of leg.maneuvers || []) {
+      const startIndex = offset + Math.max(0, Math.min(decoded.length - 1, m.begin_shape_index ?? previousEnd));
       maneuvers.push({
         type: Number(m.type),
+        startIndex,
+        signText: [
+          ...(m.signs?.exit_numbers || []).map(s => `خروجی ${s.text}`),
+          ...(m.signs?.exit_toward_locations || m.signs?.exit_toward || []).map(s => s.text),
+          ...(m.signs?.exit_branch_names || m.signs?.exit_branches || []).map(s => s.text),
+        ].filter(Boolean).slice(0, 3).join(" · "),
         instruction: localInstruction(
           Number(m.type),
           (m.street_names || []).join("، "),
@@ -182,6 +190,8 @@ export function normalizeTrip(trip, fallback = false) {
             ),
           ),
       });
+      previousEnd = m.end_shape_index ?? decoded.length - 1;
+    }
   }
   const cumulative = measureRoute(points);
   const meters =
@@ -203,12 +213,41 @@ export function normalizeTrip(trip, fallback = false) {
     cumulative,
     maneuvers: maneuvers.map((m) => ({
       ...m,
+      startDistance: cumulative[m.startIndex],
       endDistance: cumulative[m.endIndex],
     })),
     distance: meters,
     duration: seconds,
     fallback,
   };
+}
+// Preview only the selected route. A bounded early turn keeps the current road in view.
+export function navigationVision(route, progress, speed, mode = "car") {
+  const length = route.cumulative.at(-1);
+  const horizon = mode === "walking" ? 32 : Math.max(85, Math.min(240, Math.max(0, speed) * 8 + 40));
+  const maneuver = route.maneuvers?.find(m =>
+    m.startDistance >= progress - 8 && ![0, 1, 2, 3, 7, 8, 22].includes(m.type));
+  const toDecision = maneuver ? Math.max(0, maneuver.startDistance - progress) : Infinity;
+  const turn = maneuver && ![4, 5, 6].includes(maneuver.type) && toDecision < horizon;
+  const anticipation = turn ? Math.max(0, 1 - toDecision / horizon) : 0;
+  const here = pointAt(route, Math.min(progress, length - 1));
+  const ahead = pointAt(route, Math.min(length, progress + (mode === "walking" ? 12 : 25)));
+  let heading = bearing(here, ahead);
+  if (anticipation > 0) {
+    const after = pointAt(route, Math.min(length, maneuver.startDistance + 35));
+    const junction = pointAt(route, maneuver.startDistance);
+    if (distance(junction, after) > 1) {
+      const delta = angleDelta(heading, bearing(junction, after));
+      heading += Math.max(-32, Math.min(32, delta * anticipation * 0.48));
+    }
+  }
+  return {bearing: (heading + 360) % 360, horizon, anticipation, maneuver, toDecision,
+    lookDistance: Math.max(mode === "walking" ? 20 : 50, Math.max(0, speed) * 4) + anticipation * 45};
+}
+
+export function routeSection(route, start, end) {
+  if (end <= start) return [];
+  return [pointAt(route, start), ...route.points.filter((_, i) => route.cumulative[i] > start && route.cumulative[i] < end), pointAt(route, end)];
 }
 export async function calculateRoutes(origin, destination, mode, signal) {
   let lastError;

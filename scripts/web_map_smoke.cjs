@@ -187,6 +187,23 @@ async function routeReady(p) {
     assert.equal(initial.rtl, "loaded");
     assert.ok(initial.buildings > 0);
     assert.equal(initial.sources, 1);
+    assert.equal(await p.evaluate(() => smokeMap.getLayer("world-road-surface").type), "line");
+    await p.evaluate(() => smokeMap.jumpTo({bearing: 75}));
+    assert.equal(await p.locator("#northCompass").isVisible(), true);
+    await p.locator("#northCompass").click();
+    await p.waitForFunction(() => Math.abs(smokeMap.getBearing()) < .1);
+    await p.evaluate(async () => {
+      const {BridgeLayer} = await import('./roads.mjs');
+      const layer = new BridgeLayer(); layer.id = 'smoke-bridge';
+      smokeMap.addLayer(layer);
+      layer.update([{properties: {class: 'primary', brunnel: 'bridge', layer: 1}, geometry: {type: 'LineString', coordinates: [[51.404,35.7006],[51.406,35.7006]]}}], [51.405,35.7006]);
+      window.smokeBridge = layer;
+    });
+    await p.waitForFunction(() => smokeBridge.dirty === false);
+    assert.ok(await p.evaluate(() => smokeBridge.vertices > 0));
+    assert.equal(await p.evaluate(() => smokeMap.getCanvas().getContext('webgl2').getError()), 0);
+    await p.screenshot({path: 'iran-navigator-bridges.png'});
+    await p.evaluate(() => smokeMap.removeLayer('smoke-bridge'));
     await p.screenshot({ path: "iran-navigator-web-smoke.png" });
     await p.setViewportSize({ width: 390, height: 844 });
     await p.waitForFunction(() => smokeMap.loaded());
@@ -197,7 +214,7 @@ async function routeReady(p) {
     await p.screenshot({ path: "iran-navigator-web-mobile-smoke.png" });
     await p.setViewportSize({ width: 1440, height: 1000 });
     console.log(
-      "PASS: Minimal home, real vector map/buildings, RTL and mobile layout.",
+      "PASS: North compass, road hierarchy, GPU-rendered elevated bridge, real vector buildings, RTL and mobile layout.",
     );
     await p.locator("#openSearch").click();
     await p.locator("#searchInput").fill("موزه");
@@ -342,7 +359,7 @@ async function routeReady(p) {
       await navigator.serviceWorker.ready;
     });
     const cached = await p.evaluate(async () => {
-      const c = await caches.open("navigator-world-v1");
+      const c = await caches.open("navigator-world-v2");
       return (await c.keys()).map((r) => new URL(r.url).pathname);
     });
     assert.ok(

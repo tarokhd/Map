@@ -1,3 +1,4 @@
+import "./compat.mjs";
 import {
   MODES,
   fa,
@@ -10,7 +11,10 @@ import {
   pointAt,
   matchRoute,
   usablePosition,
+  navigationVision,
+  routeSection,
 } from "./navigation.mjs";
+import {addRoadLayers, BridgeLayer} from "./roads.mjs";
 import {
   BIOMES,
   clamp,
@@ -91,6 +95,9 @@ const routeCache = new Map();
 const mapErrors = [];
 let loadingFailed = false;
 let loadingTimer;
+let bridges;
+let bridgeRefreshTimer;
+let bridgeFingerprint = "";
 
 function toast(message) {
   $("toast").textContent = message;
@@ -253,6 +260,7 @@ function addWorldLayers() {
   const before = base
     .slice(buildingIndex + 1)
     .find((l) => l.type === "symbol")?.id;
+  addRoadLayers(map, base[buildingIndex]?.id);
   map.addImage("surface-asphalt", materialTexture("#738894"));
   map.addImage("surface-asphalt-major", materialTexture("#8d9da3"));
   map.addImage("surface-ground", materialTexture("#b2c0c4", "urban"));
@@ -336,11 +344,16 @@ function addWorldLayers() {
     },
     before,
   );
+  bridges = new BridgeLayer();
+  bridgeFingerprint = "";
+  try { map.addLayer(bridges, before); } catch (error) { console.warn("3D bridges:", error.message); bridges = null; }
   for (const id of [
     "journey-route",
     "journey-progress",
     "user-position",
     "accuracy-source",
+    "decision-path",
+    "decision-point",
   ])
     map.addSource(id, { type: "geojson", data: empty() });
   map.addLayer({
@@ -350,7 +363,7 @@ function addWorldLayers() {
     layout: { "line-cap": "round", "line-join": "round" },
     paint: {
       "line-color": "#a5e2df",
-      "line-width": 15,
+      "line-width": ["interpolate", ["exponential", 1.5], ["zoom"], 13, 12, 18, 32, 22, 58],
       "line-blur": 8,
       "line-opacity": 0.36,
     },
@@ -360,15 +373,18 @@ function addWorldLayers() {
     type: "line",
     source: "journey-route",
     layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": "#112d3b", "line-width": 8, "line-opacity": 0.9 },
+    paint: { "line-color": "#112d3b", "line-width": ["interpolate", ["exponential", 1.5], ["zoom"], 13, 7, 18, 18, 22, 38], "line-opacity": 0.95 },
   });
   map.addLayer({
     id: "route-light",
     type: "line",
     source: "journey-route",
     layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": "#c6f4ed", "line-width": 3.5, "line-opacity": 0.95 },
+    paint: { "line-color": "#c6f4ed", "line-width": ["interpolate", ["exponential", 1.5], ["zoom"], 13, 3, 18, 9, 22, 24], "line-opacity": 0.85 },
   });
+  map.addLayer({id: "route-markings", type: "line", source: "journey-route", layout: {"line-join": "round"}, paint: {"line-color": "#efffff", "line-width": 1.2, "line-dasharray": [2, 5], "line-opacity": 0.8}});
+  map.addLayer({id: "decision-light", type: "line", source: "decision-path", layout: {"line-cap": "round", "line-join": "round"}, paint: {"line-color": "#ffe2a6", "line-width": 5, "line-opacity": 0.95}});
+  map.addLayer({id: "decision-ring", type: "circle", source: "decision-point", paint: {"circle-radius": 14, "circle-color": "#ffe2a6", "circle-opacity": 0.08, "circle-stroke-width": 1.5, "circle-stroke-color": "#ffe2a6", "circle-pitch-alignment": "map", "circle-pitch-scale": "map"}});
   map.addLayer({
     id: "route-progress",
     type: "line",
@@ -409,6 +425,17 @@ function addWorldLayers() {
   currentPalette = null;
   desiredPalette = null;
   updateEnvironment(true);
+  refreshBridges();
+}
+function refreshBridges() {
+  if (!bridges || !map.isStyleLoaded()) return;
+  const center = map.getCenter();
+  const features = map.getZoom() >= 14 ? map.querySourceFeatures("openfreemap", {sourceLayer: "transportation", filter: ["==", "brunnel", "bridge"]}) : [];
+  const fingerprint = JSON.stringify(features.map(f => [f.properties.class, f.properties.layer, f.geometry]));
+  if (fingerprint === bridgeFingerprint) return;
+  bridgeFingerprint = fingerprint;
+  const count = bridges.update(features, [center.lng, center.lat]);
+  $("bridgeNote").hidden = count === 0;
 }
 function addPlaces() {
   map.addLayer({
@@ -492,6 +519,7 @@ function applyPalette(palette, sun) {
         paint("fill-color", p.road);
     }
     if (layer.type === "line" && source) {
+      if (id.startsWith("world-")) continue;
       if (source === "transportation")
         paint(
           "line-color",
@@ -530,6 +558,11 @@ function applyPalette(palette, sun) {
   );
   map.setPaintProperty("route-aura", "line-color", p.accent);
   map.setPaintProperty("route-light", "line-color", p.accent);
+  map.setPaintProperty("world-road-edge", "line-color", p.edge);
+  map.setPaintProperty("world-road-surface", "line-color", p.road);
+  map.setPaintProperty("world-road-markings", "line-color", p.text);
+  map.setPaintProperty("world-underpass", "line-color", p.edge);
+  if (bridges) bridges.palette = p;
   map.updateImage("surface-asphalt", materialTexture(p.road));
   map.updateImage("surface-asphalt-major", materialTexture(p.roadMajor));
   map.updateImage("surface-ground", materialTexture(p.edge, p.biome));
@@ -1098,30 +1131,26 @@ function updateMovement(point, progress, speed, now) {
   state.speed = speed;
   const length = route.cumulative.at(-1),
     remaining = Math.max(0, length - progress);
-  const maneuver =
-    route.maneuvers.find((m) => m.endDistance > progress + 6) ||
-    route.maneuvers.at(-1);
+  const vision = navigationVision(route, progress, speed, state.mode);
+  const maneuver = vision.maneuver;
   $("nextInstruction").textContent =
     maneuver?.instruction || "به مسیر ادامه دهید";
   $("nextDistance").textContent = maneuver
-    ? `${formatDistance(Math.max(0, maneuver.endDistance - progress))} دیگر`
+    ? `${formatDistance(vision.toDecision)} دیگر`
     : formatDistance(remaining);
-  const glyphs = {
-    9: "↗",
-    10: "↱",
-    11: "↱",
-    12: "↶",
-    13: "↶",
-    14: "↰",
-    15: "↰",
-    16: "↖",
-    26: "⟳",
-    27: "↗",
-    4: "◎",
-    5: "◎",
-    6: "◎",
-  };
-  $("maneuverGlyph").textContent = glyphs[maneuver?.type] || "↑";
+  $("nextRoadHint").textContent = maneuver?.signText || "";
+  $("nextRoadHint").hidden = !maneuver?.signText;
+  const type = maneuver?.type;
+  const left = [13,14,15,16,19,21,24,38].includes(type);
+  const turn = [9,10,11,14,15,16,18,19,20,21,23,24,27,37,38].includes(type);
+  const uturn = [12,13].includes(type);
+  const arrival = [4,5,6].includes(type);
+  const path = arrival ? 'M24 40V25 M24 8a8 8 0 1 0 0 16a8 8 0 1 0 0-16'
+    : uturn ? 'M12 40V20a12 12 0 0 1 24 0v10 M29 23l7 7 7-7'
+    : type === 26 ? 'M14 39V32a13 13 0 1 1 20-10 M34 11v11H23'
+    : turn ? 'M12 40V25Q12 14 23 14H39 M31 6l8 8-8 8'
+    : 'M24 40V8 M15 17l9-9 9 9';
+  $("maneuverGlyph").innerHTML = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="${path}"${left ? ' transform="translate(48 0) scale(-1 1)"' : ''}/></svg>`;
   $("remainingTime").textContent =
     remaining < 10
       ? "رسیدید"
@@ -1130,22 +1159,15 @@ function updateMovement(point, progress, speed, now) {
   $("speed").textContent = fa(Math.round(speed * 3.6));
   if (now - lastCameraAt < 130 || !state.follow) return;
   lastCameraAt = now;
-  const look = pointAt(
-    route,
-    Math.min(
-      length,
-      progress + Math.max(state.mode === "walking" ? 20 : 45, speed * 3),
-    ),
-  );
-  const targetBearing = bearing(point, look);
+  const targetBearing = vision.bearing;
   state.bearing =
     state.bearing === null
       ? targetBearing
       : state.bearing + angleDelta(state.bearing, targetBearing) * 0.28;
   const height =
-    state.mode === "walking" ? 3 : state.mode === "motorcycle" ? 8 : 12;
+    (state.mode === "walking" ? 3 : state.mode === "motorcycle" ? 8 : 12) + vision.anticipation * (state.mode === "walking" ? 1 : 5);
   const pitch = clamp(
-    (Math.atan2(distance(point, look), height) * 180) / Math.PI,
+    (Math.atan2(vision.lookDistance, height) * 180) / Math.PI,
     0,
     84,
   );
@@ -1167,6 +1189,9 @@ function updateMovement(point, progress, speed, now) {
   visited.push(point);
   if (visited.length >= 2)
     map.getSource("journey-progress")?.setData(lineFeature(visited));
+  const decisionPoints = vision.anticipation > 0 ? routeSection(route, Math.max(progress, maneuver.startDistance - 25), Math.min(length, maneuver.startDistance + 55)) : [];
+  map.getSource("decision-path")?.setData(decisionPoints.length > 1 ? lineFeature(decisionPoints) : empty());
+  map.getSource("decision-point")?.setData(vision.anticipation > 0 ? pointFeature(pointAt(route, maneuver.startDistance)) : empty());
   // Preview follows the route's coordinates without replacing the real GPS position.
   if (state.screen === "preview" && !contextPending) {
     contextPending = true;
@@ -1192,6 +1217,8 @@ function stopMovement(restore = true) {
     }
   }
   map?.getSource("journey-progress")?.setData(empty());
+  map?.getSource("decision-path")?.setData(empty());
+  map?.getSource("decision-point")?.setData(empty());
   updatePositionSources();
 }
 function immersiveLabels(hide) {
@@ -1201,11 +1228,17 @@ function immersiveLabels(hide) {
       map.setLayoutProperty(
         layer.id,
         "visibility",
-        hide ? "none" : layer.metadata?.["navigator:visibility"] || "visible",
+        hide && layer["source-layer"] !== "transportation_name" ? "none" : layer.metadata?.["navigator:visibility"] || "visible",
       );
     }
 }
 function bindEvents() {
+  $("northCompass").onclick = () => {
+    if (!map) return;
+    state.follow = false;
+    map.easeTo({bearing: 0, duration: reducedMotion ? 0 : 500});
+    if (["navigation", "preview"].includes(state.screen)) $("navigationStatus").textContent = "جهت شمال؛ برای دنبال کردن مسیر، راهنمای بالا را لمس کنید.";
+  };
   $("openSearch").onclick = () => openSearch();
   $("closeSearch").onclick = () => $("searchDialog").close();
   $("searchForm").onsubmit = (event) => {
@@ -1321,6 +1354,7 @@ async function boot() {
       $("mapMessage").hidden = true;
       $("map").setAttribute("aria-busy", "false");
       updateEnvironment();
+      refreshBridges();
     });
     map.on("error", (event) => {
       console.warn("Map:", event.error?.message);
@@ -1355,6 +1389,13 @@ async function boot() {
       );
     });
     map.on("moveend", () => updateEnvironment());
+    map.on("rotate", () => { $("compassNeedle").style.transform = `rotate(${-map.getBearing()}deg)`; });
+    map.on("sourcedata", (event) => {
+      if (event.sourceId !== "openfreemap" || event.sourceDataType !== "content") return;
+      clearTimeout(bridgeRefreshTimer);
+      bridgeRefreshTimer = setTimeout(refreshBridges, 350);
+    });
+    map.on("moveend", refreshBridges);
     map.on("dragstart", (event) => {
       if (
         event.originalEvent &&

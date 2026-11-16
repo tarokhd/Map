@@ -14,12 +14,17 @@ sources = {
         "models": (ROOT / "android/app/src/main/java/com/irannavigator/demo/NavigationModels.kt").read_text(encoding="utf-8"),
         "routing": (ROOT / "android/app/src/main/java/com/irannavigator/demo/RoutingEngine.kt").read_text(encoding="utf-8"),
         "map": (ROOT / "android/app/src/main/java/com/irannavigator/demo/MainActivity.kt").read_text(encoding="utf-8"),
+        "world": "\n".join((ROOT / name).read_text(encoding="utf-8") for name in (
+            "web/app.mjs", "web/navigation.mjs", "web/environment.mjs")),
+        "bridge": (ROOT / "shared/runtime/native-bridge.js").read_text(encoding="utf-8"),
+        "packaging": (ROOT / "scripts/package_world_assets.py").read_text(encoding="utf-8"),
     },
     "iOS": {
         "models": (ROOT / "ios/Sources/Models/NavigationModels.swift").read_text(encoding="utf-8"),
         "routing": (ROOT / "ios/Sources/Services/RoutingService.swift").read_text(encoding="utf-8"),
-        "map": (ROOT / "ios/Sources/Map/MapLibreView.swift").read_text(encoding="utf-8"),
-        "location": (ROOT / "ios/Sources/Services/LocationService.swift").read_text(encoding="utf-8"),
+        "map": (ROOT / "ios/Sources/World/WorldServer.swift").read_text(encoding="utf-8"),
+        "world": "\n".join((ROOT / name).read_text(encoding="utf-8") for name in ("web/app.mjs", "web/navigation.mjs", "web/environment.mjs", "web/roads.mjs")),
+        "location": (ROOT / "ios/Sources/World/WorldCoordinator.swift").read_text(encoding="utf-8"),
         "view": (ROOT / "ios/Sources/Views/ContentView.swift").read_text(encoding="utf-8"),
     },
     "Web": {
@@ -52,23 +57,31 @@ for platform in sources:
     if contract["routeGeometry"]["shapeFormat"] not in combined:
         errors.append(f"{platform}: route geometry must use polyline6")
 
-require("Android", "map", 'FillExtrusionLayer("iran-buildings-3d", "openmaptiles")', "3D building source")
-require("Android", "map", 'buildings.sourceLayer = "building"', "3D building source-layer")
-require("Android", "map", 'Expression.get("render_height")', "3D building height attribute")
-require("Android", "map", '"user-accuracy-source"', "GPS accuracy radius")
+require("Android", "world", 'source: "openfreemap"', "shared 3D building source")
+require("Android", "world", '"source-layer": "building"', "3D building source-layer")
+require("Android", "world", "fill-extrusion-height", "3D building height attribute")
+require("Android", "world", "accuracy-source", "GPS accuracy radius")
 require("Android", "map", "LocationManager.GPS_PROVIDER", "GPS provider")
-require("Android", "map", "distanceAlongRoute", "distance-along-route guidance progress")
-require("Android", "routing", 'put("shape_format", "polyline6")', "polyline6 route request")
+require("Android", "world", "distanceAlongRoute", "distance-along-route guidance progress")
+require("Android", "world", 'shape_format: "polyline6"', "polyline6 route request")
+require("Android", "map", "WorldHostPolicy.isTrustedUrl", "trusted local application origin")
+require("Android", "map", "WorldHostPolicy.isFreshAccurateLocation", "fresh native GPS")
+require("Android", "map", "WebViewAssetLoader", "packaged local renderer")
+require("Android", "bridge", "native.requestLocation", "native GPS bridge")
+require("Android", "packaging", "hashlib.sha512(payload)", "verified bundled renderer")
 
-require("iOS", "map", 'style.source(withIdentifier: "openmaptiles")', "3D building source")
-require("iOS", "map", 'buildings.sourceLayerIdentifier = "building"', "3D building source-layer")
-require("iOS", "map", 'forKeyPath: "render_height"', "3D building height attribute")
-require("iOS", "map", '"iran-user-accuracy-fill"', "GPS accuracy radius")
-require("iOS", "map", "pitch: show3DBuildings ? 50 : 0", "initial 3D camera pitch")
+require("iOS", "world", 'source: "openfreemap"', "shared 3D source")
+require("iOS", "world", '"source-layer": "building"', "3D building source-layer")
+require("iOS", "world", "fill-extrusion-height", "3D building height")
+require("iOS", "world", "accuracy-source", "GPS accuracy radius")
 require("iOS", "location", "kCLLocationAccuracyBestForNavigation", "high-accuracy CoreLocation")
-require("iOS", "routing", '"shape_format": "polyline6"', "polyline6 route request")
-require("iOS", "location", "NavigationLocationQuality.isUsable", "fresh and accurate GPS validation")
-require("iOS", "view", "distanceAlongRoute", "distance-along-route guidance progress")
+require("iOS", "world", 'shape_format: "polyline6"', "polyline6 request")
+require("iOS", "location", "fresh(position)", "fresh and accurate GPS")
+require("iOS", "location", "WorldHostPolicy.trusted", "trusted packaged origin")
+require("iOS", "view", "WorldCoordinator", "shared World runtime host")
+for platform in ("Android", "iOS"):
+    require(platform, "world", "navigationVision", "early selected-route camera")
+    require(platform, "world", "northCompass", "north compass")
 
 # Provider contract: Neshan is traffic-aware only for the officially documented
 # car and motorcycle Direction API. Credentials remain server-side.

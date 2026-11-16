@@ -6,8 +6,17 @@ on:
     paths:
       - "android/**"
       - "shared/**"
+      - "web/**"
+      - "scripts/package_world_assets.py"
+      - "scripts/verify_world_bundles.py"
+      - "scripts/android*"
       - ".github/workflows/android-build.yml"
   workflow_dispatch:
+    inputs:
+      publish_test_apk:
+        description: Publish the verified debug APK as a GitHub prerelease
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,6 +47,14 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test shared navigation and native bridge
+        run: node --test web/tests/*.test.mjs scripts/android_bridge.test.cjs
+
       - name: Verify Android project
         working-directory: android
         run: |
@@ -54,12 +71,53 @@ jobs:
 
       - name: Build APK
         working-directory: android
-        run: gradle --no-daemon :app:assembleDebug --stacktrace
+        run: gradle --no-daemon :app:assembleDebug :app:lintDebug --stacktrace
+
+      - name: Verify packaged runtime
+        run: python3 scripts/verify_world_bundles.py android/app/build/generated/worldAssets/world
+
+      - name: Test bundled mobile shell
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+          python3 -m http.server 4174 --directory android/app/build/generated/worldAssets/world > "$RUNNER_TEMP/world-server.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4174/ > /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/android_world_smoke.cjs
+
+      - name: Prepare downloadable test APK
+        run: |
+          mkdir -p apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk apk/IranNavigator-World-debug.apk
+          cd apk
+          sha256sum IranNavigator-World-debug.apk > IranNavigator-World-debug.apk.sha256
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: IranNavigator-Android-Debug-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: apk/*
           if-no-files-found: error
           retention-days: 14
+
+  share-test-apk:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_test_apk
+    needs: build-debug-apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: IranNavigator-Android-Debug-APK
+          path: apk
+      - name: Share test build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="android-world-${GITHUB_RUN_ID}"
+          gh release create "$tag" apk/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --prerelease --title "World Android test build" \
+            --notes "Debug APK for testing the shared World runtime: north compass, street rendering, schematic bridges, early exit camera and native GPS. Android 7+ with an updated Android System WebView. Map/search/routing require internet. Heights are illustrative; this is not lane-level guidance."
