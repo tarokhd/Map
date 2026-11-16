@@ -24,7 +24,7 @@ permissions:
 jobs:
   build-debug-apk:
     name: Build Android debug APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -76,10 +76,13 @@ jobs:
       - name: Verify packaged runtime
         run: python3 scripts/verify_world_bundles.py android/app/build/generated/worldAssets/world
 
-      - name: Test bundled mobile shell
+      - name: Install browser test runtime
         run: |
           npm install --no-save playwright@1.56.1
           npx playwright install --with-deps chromium
+
+      - name: Test bundled mobile shell
+        run: |
           python3 -m http.server 4174 --directory android/app/build/generated/worldAssets/world > "$RUNNER_TEMP/world-server.log" 2>&1 &
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:4174/ > /dev/null; then break; fi
@@ -105,7 +108,7 @@ jobs:
   share-test-apk:
     if: github.event_name == 'workflow_dispatch' && inputs.publish_test_apk
     needs: build-debug-apk
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

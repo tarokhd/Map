@@ -94,4 +94,11 @@ async function search(page) {
     assert.equal(await denied.evaluate(async () => (await import('./app.mjs')).state.origin), null);
     console.log('PASS: Bundled renderer/RTL/CSP, mobile destination flow, first-person camera, native GPS watch/cancel and denied permission. No remote application code or service worker.');
   } finally {await browser.close();}
-})().catch(error => {console.error(error); process.exit(1);});
+})().catch(error => {
+  console.error(error);
+  if (process.env.GITHUB_ACTIONS) {
+    const message = String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+    console.error(`::error title=Bundled mobile shell failed::${message}`);
+  }
+  process.exit(1);
+});
